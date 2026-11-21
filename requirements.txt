@@ -1,0 +1,26 @@
+# Core Numerical & Data Processing
+pandas
+numpy
+pyarrow
+fastparquet
+
+# Market Data Ingestion
+yfinance
+pandas-datareader
+
+# Technical Analysis & Quantitative Indicators
+ta-lib
+pandas-ta
+
+# Machine Learning & Explainability
+scikit-learn
+xgboost
+lightgbm
+shap
+
+# Visualization & Dashboard
+streamlit
+plotly
+
+# Testing & Quality Assurance
+pytest
