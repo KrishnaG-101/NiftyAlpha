@@ -7,7 +7,7 @@
 [![Tests](https://img.shields.io/badge/pytest-17%20passed-brightgreen.svg)](tests/)
 
 > **Capstone Project for the DataTalksClub Stock Market Analytics Zoomcamp**  
-> *Author: Lead AI Developer & Quantitative Strategist*
+> *Author: Krishna Gelra*
 
 ---
 
@@ -15,7 +15,7 @@
 
 Most algorithmic trading literature focuses almost exclusively on developed markets (predominantly US equities in the S&P 500 and NASDAQ). While foundational, quantitative models calibrated on US equities frequently suffer severe degradation when naively applied to emerging economies.
 
-**NiftyAlpha** is an end-to-end, production-grade automated quantitative trading system designed specifically for the **Indian Equity Market (NSE Top 20)**. It conditions price-action signals against cross-asset macroeconomic drivers (Brent Crude, USD/INR, US 10Y Yields, and India VIX) and optimizes decision boundaries strictly for **Precision ($\ge 60\%$)** to minimize costly false-positive trade executions. 
+**NiftyAlpha** is an end-to-end, production-grade automated quantitative trading system designed specifically for the **Indian Equity Market (NSE Top 20)**. It conditions price-action signals against cross-asset macroeconomic drivers (Brent Crude, USD/INR, US 10Y Yields, and India VIX) and optimizes decision boundaries strictly for **Precision ($\ge 0.60$)** to minimize costly false-positive trade executions. 
 
 The strategy is validated through a discrete, day-by-day Out-of-Sample simulation engine (2024–present) incorporating **0.20% round-trip transaction friction** (accounting for statutory Indian Securities Transaction Tax, broker fees, and exchange turnover charges), dynamic risk rules (-8% Stop-Loss with gap-down fill, +15% Take-Profit, and 20-day time exit), and benchmarked against the **Nifty 50 Index (`^NSEI`)**.
 
@@ -79,18 +79,26 @@ flowchart TD
 - **Fiscal Calendar Seasonality**: The Indian Union Budget, presented in early February, creates concentrated policy, tax, and regulatory volatility. NiftyAlpha explicitly encodes Union Budget seasonal proximity features.
 
 ### 2. Machine Learning Formulation
-The model predicts whether an equity will achieve **positive growth over a 20-trading-day holding horizon** (approximately one calendar month):
+The primary objective of NiftyAlpha is to predict whether a top Indian blue-chip equity will generate **positive alpha outperformance** relative to the Nifty 50 benchmark index over a 20-trading-day forward holding horizon (approximately one calendar month).
 
-$$\text{Target Return}_{t, t+20} = \frac{\text{Close}_{t+20} - \text{Close}_t}{\text{Close}_t}$$
+1. **Individual Equity Forward Return**:
+$$R_{\text{stock}}(t, t+20) = \frac{\text{Close}_{\text{stock}}(t+20) - \text{Close}_{\text{stock}}(t)}{\text{Close}_{\text{stock}}(t)}$$
 
-$$\text{is\_positive\_growth} = \mathbb{I}(\text{Target Return}_{t, t+20} > 0) \in \{0, 1\}$$
+2. **Benchmark Forward Return (Nifty 50 Index)**:
+$$R_{\text{nifty}}(t, t+20) = \frac{\text{Close}_{\text{nifty}}(t+20) - \text{Close}_{\text{nifty}}(t)}{\text{Close}_{\text{nifty}}(t)}$$
+
+3. **Excess Alpha Outperformance Return**:
+$$\text{Excess Return}(t, t+20) = R_{\text{stock}}(t, t+20) - R_{\text{nifty}}(t, t+20)$$
+
+4. **Binary Classification Target (`target_alpha_outperform`)**:
+$$\text{Target}(t) = \begin{cases} 1 & \text{if } \text{Excess Return}(t, t+20) > 0 \;\text{ and }\; R_{\text{stock}}(t, t+20) > 0 \\ 0 & \text{otherwise} \end{cases}$$
 
 ### 3. The Precision-First Quantitative Imperative
 Standard machine learning models frequently prioritize balanced **Accuracy** or **ROC-AUC**. In quantitative trading, prediction errors carry asymmetric financial costs:
 
-$$\text{Precision} = \frac{\text{True Positives (Profitable Buys)}}{\text{True Positives} + \text{False Positives (Loss-Making Buys)}}$$
+$$\text{Precision} = \frac{\text{True Positives}}{\text{True Positives} + \text{False Positives}}$$
 
-- **False Positive (Type I Error)**: The model issues a buy signal, but the stock subsequently depreciates. The portfolio suffers immediate capital drawdown, bid-ask spread slippage, and statutory Indian Securities Transaction Tax (STT). **False positives destroy real trading capital.**
+- **False Positive (Type I Error)**: The model issues a buy signal, but the stock subsequently depreciates or underperforms. The portfolio suffers immediate capital drawdown, bid-ask spread slippage, and statutory Indian Securities Transaction Tax (STT). **False positives destroy real trading capital.**
 - **False Negative (Type II Error)**: The model misses an uptrend. The portfolio simply maintains cash or accrues the 7.0% sovereign risk-free rate. **False negatives represent missed upside, not capital loss.**
 
 Consequently, NiftyAlpha rejects standard 0.50 decision thresholds in favor of **calibrated confidence cutoffs ($p \ge 0.60$)** that isolate high-conviction market regimes.
@@ -143,7 +151,7 @@ To avoid black-box decision making, NiftyAlpha utilizes `shap.TreeExplainer` to 
 Academic backtests frequently inflate performance by assuming zero slippage, immediate close execution, and unlimited leverage. NiftyAlpha implements strict institutional execution constraints:
 
 ### Simulation Protocol & Risk Rules
-1. **Starting Capital**: **INR 1,000,000** (\u20b910,00,000).
+1. **Starting Capital**: **INR 1,000,000** (₹10,00,000).
 2. **Diversification & Capacity**: Maximum of **5 concurrent open positions** at any time. Target position size is 20% of current portfolio equity, strictly bounded by available cash.
 3. **Execution Delay**: Signals generated at market close on Day $t$ are executed at the **Market Open on Day $t+1$**.
 4. **Friction & Taxes**: **0.10% on entry + 0.10% on exit (0.20% round-trip)** modeling Indian Securities Transaction Tax (STT), NSE turnover charges, SEBI fees, brokerage commission, and bid-ask slippage.
@@ -199,7 +207,7 @@ The `notebooks/` directory contains three fully executed, publication-grade Jupy
 - **Explainable AI (XAI)**: Global SHAP beeswarm summary plots, feature dependence interactions, and local force/waterfall plots explaining individual trade decisions.
 
 ### 3. [03_trading_simulation.ipynb](file:///e:/Code/Projects/Major%20Projects/Programs%20&%20Cohorts/NiftyAlpha/notebooks/03_trading_simulation.ipynb) — Realistic Execution Backtesting & Out-of-Sample Performance
-- **Microstructure Constraints**: \u20b91,000,000 capital, 5 concurrent position limit (20% sizing), $t+1$ market open execution, 0.20% round-trip friction (brokerage + STT), and gap-down stop loss fills.
+- **Microstructure Constraints**: ₹1,000,000 capital, 5 concurrent position limit (20% sizing), $t+1$ market open execution, 0.20% round-trip friction (brokerage + STT), and gap-down stop loss fills.
 - **Execution Audit**: Comprehensive trade log analysis breaking down exit mechanisms (Take-Profit vs. Trailing Breakeven vs. Stop-Loss vs. Time Exit).
 - **Comprehensive Benchmarking**: Strategy equity curve vs. Nifty 50 Buy-and-Hold benchmark with cumulative alpha spread.
 - **Risk & Regime Diagnostics**: Underwater drawdown curves, monthly returns calendar heatmap, rolling 60-day annualized alpha, and hyperparameter sensitivity grids.
@@ -394,8 +402,8 @@ NiftyAlpha/
 │   ├── test_models.py             # Tests for model training & thresholding
 │   ├── test_backtest.py           # Tests for simulation loop & friction accounting
 │   └── test_dashboard.py          # Tests for dashboard caching & loaders
-├── scripts/
-│   └── execute_notebooks.py       # In-process notebook output renderer
+├── run_dashboard.bat              # One-click Windows dashboard launcher
+├── run_dashboard.ps1              # PowerShell dashboard launcher
 ├── main.py                        # CLI orchestrator router
 ├── Dockerfile                     # Multi-stage Docker container specification
 ├── Makefile                       # Workflow build & execution shortcuts
