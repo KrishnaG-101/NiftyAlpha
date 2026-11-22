@@ -147,8 +147,9 @@ def test_pipeline_end_to_end(tmp_path: Path):
 def test_shap_explainer_dispatch():
     """Verify SHAP explainer dispatch helper handles import error or constructs explainer."""
     from sklearn.tree import DecisionTreeClassifier
-    model = DecisionTreeClassifier()
-    sample_df = pd.DataFrame(np.random.rand(5, 3), columns=["f1", "f2", "f3"])
+    sample_df = pd.DataFrame(np.random.rand(10, 3), columns=["f1", "f2", "f3"])
+    model = DecisionTreeClassifier(max_depth=2, random_state=42)
+    model.fit(sample_df, [0, 1, 0, 1, 0, 1, 0, 1, 0, 1])
 
     try:
         import shap

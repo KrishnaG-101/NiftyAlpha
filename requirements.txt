@@ -9,8 +9,8 @@ yfinance
 pandas-datareader
 
 # Technical Analysis & Quantitative Indicators
-ta-lib
-pandas-ta
+ta-lib; platform_system != "Windows"
+pandas-ta; python_version < "3.14"
 
 # Machine Learning & Explainability
 scikit-learn
@@ -21,6 +21,11 @@ shap
 # Visualization & Dashboard
 streamlit
 plotly
+matplotlib
+seaborn
 
-# Testing & Quality Assurance
+# Testing & Research Notebook Execution
 pytest
+nbformat
+nbconvert
+ipykernel

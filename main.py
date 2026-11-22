@@ -73,7 +73,7 @@ def run_train() -> None:
     logger.info(">>> [Phase 4/5] Model Training Completed.")
 
 
-def run_simulate(threshold: float = 0.60) -> None:
+def run_simulate(threshold: float = 0.52) -> None:
     """Executes Phase 5: Realistic Trading Simulation."""
     logger.info(">>> [Phase 5/5] Initiating Day-by-Day Trading Simulation...")
     from src.backtest import BacktestPipeline
@@ -89,7 +89,7 @@ def run_simulate(threshold: float = 0.60) -> None:
     logger.info(">>> [Phase 5/5] Trading Simulation Completed.")
 
 
-def run_all(force: bool = False, threshold: float = 0.60) -> None:
+def run_all(force: bool = False, threshold: float = 0.52) -> None:
     """Executes all pipeline phases sequentially."""
     start_time = time.time()
     banner = "=" * 70

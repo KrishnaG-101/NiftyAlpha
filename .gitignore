@@ -43,6 +43,9 @@ htmlcov/
 .Trashes
 ehthumbs.db
 Thumbs.db
+desktop.ini
+*.tmp
+*.temp
 .idea/
 .vscode/
 *.swp
@@ -50,27 +53,28 @@ Thumbs.db
 *~
 
 # ==============================================================================
-# Data Directories (Preserve structure via .gitkeep)
+# Data Directories
 # ==============================================================================
 data/raw/*
-!data/raw/.gitkeep
 data/processed/*
-!data/processed/.gitkeep
 
 # ==============================================================================
-# Model Artifacts (Ignore serialized binary weights, preserve folder via .gitkeep)
+# Model Artifacts (Ignore serialized binary weights)
 # ==============================================================================
 models/*.pkl
 models/*.joblib
 models/*.onnx
 models/*.bin
-!models/.gitkeep
 
 # ==============================================================================
-# Reports & Outputs (Preserve folder via .gitkeep)
+# Reports & Outputs
 # ==============================================================================
 reports/*
-!reports/.gitkeep
+
+# ==============================================================================
+# Internal Helper Scripts
+# ==============================================================================
+scripts/
 
 # ==============================================================================
 # Build & Distribution

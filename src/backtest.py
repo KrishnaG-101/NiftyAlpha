@@ -61,7 +61,8 @@ DEFAULT_PROB_THRESHOLD = 0.60
 def load_best_model(models_dir: Path, preferred_name: Optional[str] = None) -> Tuple[Any, str]:
     """
     Selects and loads the best trained model artifact from the models directory.
-    Checks reports/metrics.json or iterates priority list: xgboost -> random_forest -> others.
+    Checks reports/metrics.json, prioritizing calibrated ensemble architectures
+    (xgboost -> random_forest -> logistic_regression) over single decision trees.
     """
     metrics_file = models_dir.parent / "reports" / "metrics.json"
 
@@ -77,11 +78,14 @@ def load_best_model(models_dir: Path, preferred_name: Optional[str] = None) -> T
             with open(metrics_file, "r", encoding="utf-8") as f:
                 metrics = json.load(f)
             if metrics:
-                best_name = max(metrics.keys(), key=lambda k: metrics[k].get("pr_auc", 0.0))
+                # Prioritize ensemble models for out-of-sample stability
+                ensemble_keys = [k for k in ["xgboost", "random_forest", "logistic_regression"] if k in metrics]
+                candidate_pool = {k: metrics[k] for k in ensemble_keys} if ensemble_keys else metrics
+                best_name = max(candidate_pool.keys(), key=lambda k: candidate_pool[k].get("pr_auc", 0.0))
                 best_path = models_dir / f"{best_name}_model.joblib"
                 if best_path.exists():
                     logger.info("Auto-selected best model from metrics.json: %s (PR-AUC: %.4f)",
-                                best_name, metrics[best_name].get("pr_auc", 0.0))
+                                best_name, candidate_pool[best_name].get("pr_auc", 0.0))
                     return joblib.load(best_path), best_name
         except Exception as e:
             logger.warning("Could not parse metrics.json for auto-selection: %s", e)
@@ -90,9 +94,9 @@ def load_best_model(models_dir: Path, preferred_name: Optional[str] = None) -> T
     priority_order = [
         "xgboost_model.joblib",
         "random_forest_model.joblib",
-        "decision_tree_model.joblib",
         "logistic_regression_model.joblib",
         "mlp_neural_network_model.joblib",
+        "decision_tree_model.joblib",
     ]
 
     for filename in priority_order:
@@ -236,8 +240,9 @@ class TradingSimulator:
         """
         Runs the chronological day-by-day event loop.
         """
-        logger.info("Initializing simulation engine [Initial Capital: INR %,.2f, Threshold: %.2f]...",
-                    self.initial_capital, self.prob_threshold)
+        logger.info(
+            f"Initializing simulation engine [Initial Capital: INR {self.initial_capital:,.2f}, Threshold: {self.prob_threshold:.2f}]..."
+        )
 
         # 1. Generate Model Predictions
         meta_cols = ["Date", "Ticker"]
@@ -256,17 +261,27 @@ class TradingSimulator:
         signal_df = X_test[meta_cols].copy()
         signal_df["Prob"] = probs
         signal_df["Buy_Signal"] = signal_df["Prob"] >= self.prob_threshold
+        if "rsi_14" in X_test.columns:
+            signal_df["rsi_14"] = X_test["rsi_14"]
+        if "price_to_sma50" in X_test.columns:
+            signal_df["price_to_sma50"] = X_test["price_to_sma50"]
 
         logger.info("Generated predictions across %d samples. Positive signals (Buy): %d",
                     len(signal_df), int(signal_df["Buy_Signal"].sum()))
+
+        # Pre-group signals by date for high-speed simulation loop
+        signals_by_date = {d: group for d, group in signal_df.groupby("Date")}
 
         # 2. Build Fast Price Lookup Table: (Date, Ticker) -> Price Row
         raw_lookup = {}
         for row in raw_prices.itertuples(index=False):
             raw_lookup[(row.Date, row.Ticker)] = row
 
-        # 3. Build Benchmark Equity Curve (^NSEI)
+        # 3. Build Benchmark Equity Curve (^NSEI) and VIX regime map
         nifty_bars = indices_df[indices_df["Ticker"] == "^NSEI"].sort_values(by="Date").copy()
+        vix_bars = indices_df[indices_df["Ticker"] == "^INDIAVIX"].sort_values(by="Date").copy()
+        vix_lookup = {r.Date: r.Close for r in vix_bars.itertuples(index=False)}
+
         test_dates = sorted(signal_df["Date"].unique())
 
         if not test_dates:
@@ -311,12 +326,24 @@ class TradingSimulator:
                 open_p = float(price_bar.Open)
                 entry_p = float(pos["entry_price"])
 
+                # Record peak gain
+                peak_gain = (high_p - entry_p) / entry_p
+                if peak_gain > pos.get("max_gain", 0.0):
+                    pos["max_gain"] = peak_gain
+
                 exit_triggered = False
                 exit_price = 0.0
                 exit_reason = ""
 
+                # Condition 0: Dynamic Profit Protection (Trailing Breakeven Stop)
+                # If stock reached >= 4.5% peak gain, trail stop to breakeven (+0.2% to cover friction)
+                if pos.get("max_gain", 0.0) >= 0.045 and low_p <= entry_p * 1.002:
+                    exit_triggered = True
+                    exit_reason = "Trailing Breakeven"
+                    exit_price = min(open_p, entry_p * 1.002)
+
                 # Condition 1: Stop Loss (-8%)
-                if low_p <= entry_p * (1.0 - self.stop_loss_pct):
+                elif low_p <= entry_p * (1.0 - self.stop_loss_pct):
                     exit_triggered = True
                     exit_reason = "Stop Loss"
                     # Exit at stop loss or open gap down
@@ -361,7 +388,11 @@ class TradingSimulator:
             # ------------------------------------------------------------------
             # Step B: Signal Processing - Execute Yesterday's Buy Signals
             # ------------------------------------------------------------------
-            if yesterday_signals and len(active_positions) < self.max_positions:
+            # Macro Regime Gate: Prohibit opening new long positions when India VIX > 22.0
+            vix_val = vix_lookup.get(current_date, 15.0)
+            allow_regime_entries = (vix_val < 22.0)
+
+            if yesterday_signals and len(active_positions) < self.max_positions and allow_regime_entries:
                 # Prioritize signals by highest prediction probability
                 sorted_signals = sorted(yesterday_signals, key=lambda s: s["Prob"], reverse=True)
 
@@ -405,6 +436,7 @@ class TradingSimulator:
                         "entry_price": open_p,
                         "shares": shares,
                         "days_held": 0,
+                        "max_gain": 0.0,
                     }
 
             # ------------------------------------------------------------------
@@ -426,8 +458,17 @@ class TradingSimulator:
             })
 
             # Store today's generated signals at Close for tomorrow's execution
-            day_signals = signal_df[(signal_df["Date"] == current_date) & signal_df["Buy_Signal"]]
-            yesterday_signals = day_signals.to_dict(orient="records")
+            day_group = signals_by_date.get(current_date)
+            if day_group is not None:
+                day_mask = day_group["Buy_Signal"]
+                if "rsi_14" in day_group.columns:
+                    day_mask = day_mask & (day_group["rsi_14"] < 0.35)
+                if "price_to_sma50" in day_group.columns:
+                    day_mask = day_mask & (day_group["price_to_sma50"] > -0.06)
+                day_signals = day_group[day_mask]
+                yesterday_signals = day_signals.to_dict(orient="records")
+            else:
+                yesterday_signals = []
 
         # ----------------------------------------------------------------------
         # Post-Simulation Accounting

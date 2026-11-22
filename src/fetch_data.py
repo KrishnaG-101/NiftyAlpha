@@ -101,12 +101,12 @@ def _clean_yfinance_dataframe(df: pd.DataFrame, ticker: str) -> pd.DataFrame:
     if isinstance(cleaned.index, pd.DatetimeIndex):
         cleaned.index = cleaned.index.tz_localize(None)
 
-    cleaned.reset_index(inplace=True)
+    cleaned = cleaned.reset_index()
 
     # Standardize Date column naming
     for col in cleaned.columns:
         if str(col).lower() in ["date", "datetime", "index"]:
-            cleaned.rename(columns={col: "Date"}, inplace=True)
+            cleaned = cleaned.rename(columns={col: "Date"})
             break
 
     # Ensure Date column is standard datetime without hours

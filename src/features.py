@@ -61,7 +61,12 @@ DEFAULT_MODELS_DIR = PROJECT_ROOT / "models"
 # Feature Schema Definitions
 METADATA_COLUMNS: List[str] = ["Date", "Ticker"]
 
-TARGET_COLUMNS: List[str] = ["target_30d_return", "is_positive_growth"]
+TARGET_COLUMNS: List[str] = [
+    "target_30d_return",
+    "is_positive_growth",
+    "target_excess_return",
+    "target_alpha_outperform",
+]
 
 NUMERIC_FEATURES: List[str] = [
     "rsi_14",
@@ -76,11 +81,18 @@ NUMERIC_FEATURES: List[str] = [
     "market_breadth_20d",
     "corr_brent_30d",
     "corr_usdinr_30d",
+    "rel_strength_nifty_20d",
+    "price_to_sma50",
+    "brent_return_5d",
+    "brent_return_20d",
+    "usdinr_return_20d",
+    "vix_change_5d",
 ]
 
 CATEGORICAL_FEATURES: List[str] = [
     "is_budget_month",
     "vix_regime_high",
+    "nifty_above_sma50",
 ] + [f"month_{m}" for m in range(1, 13)] + [f"day_{d}" for d in range(5)]
 
 
@@ -258,8 +270,19 @@ def compute_ticker_features(df_t: pd.DataFrame) -> pd.DataFrame:
     volume = df_t["Volume"]
 
     # 1. Target Variables (20 trading days forward)
-    df_t["target_30d_return"] = (close.shift(-20) - close) / close
-    df_t["is_positive_growth"] = (df_t["target_30d_return"] > 0.0).astype(int)
+    fwd_ret = (close.shift(-20) - close) / close
+    df_t["target_30d_return"] = fwd_ret
+    df_t["is_positive_growth"] = (fwd_ret > 0.0).astype(int)
+
+    if "Nifty_Close" in df_t.columns:
+        nifty_fwd = (df_t["Nifty_Close"].shift(-20) - df_t["Nifty_Close"]) / (df_t["Nifty_Close"] + 1e-9)
+        excess_ret = fwd_ret - nifty_fwd
+        df_t["target_excess_return"] = excess_ret
+        # Outperformance: Beats Nifty 50 forward return and has positive nominal growth
+        df_t["target_alpha_outperform"] = ((excess_ret > 0.0) & (fwd_ret > 0.0)).astype(int)
+    else:
+        df_t["target_excess_return"] = fwd_ret
+        df_t["target_alpha_outperform"] = (fwd_ret > 0.0).astype(int)
 
     # 2. Technical Features (Per Ticker)
     # Momentum
@@ -285,7 +308,20 @@ def compute_ticker_features(df_t: pd.DataFrame) -> pd.DataFrame:
     else:
         df_t["volume_nse_bse_ratio"] = 1.0
 
-    # 3. Cross-Market & Macro Features
+    # 3. Trend & Alpha Momentum Features
+    # Price distance to 50-day SMA
+    sma_50 = close.rolling(50).mean()
+    df_t["price_to_sma50"] = ((close - sma_50) / (sma_50 + 1e-9)).fillna(0.0)
+
+    # Relative Strength to Nifty 50 (20-day return spread)
+    if "Nifty_Close" in df_t.columns:
+        stock_20d = close.pct_change(20)
+        nifty_20d = df_t["Nifty_Close"].pct_change(20)
+        df_t["rel_strength_nifty_20d"] = (stock_20d - nifty_20d).fillna(0.0)
+    else:
+        df_t["rel_strength_nifty_20d"] = 0.0
+
+    # 4. Cross-Market & Macro Features
     if "Sensex_Close" in df_t.columns and "Nifty_Close" in df_t.columns:
         sensex_nifty_ratio = df_t["Sensex_Close"] / (df_t["Nifty_Close"] + 1e-9)
         ratio_shift_20 = sensex_nifty_ratio.shift(20)
@@ -295,18 +331,29 @@ def compute_ticker_features(df_t: pd.DataFrame) -> pd.DataFrame:
 
     stock_ret = close.pct_change()
 
-    # Macro 30-day Rolling Correlations
+    # Macro 30-day Rolling Correlations & Velocities
     if "Brent_Close" in df_t.columns:
         brent_ret = df_t["Brent_Close"].pct_change()
         df_t["corr_brent_30d"] = stock_ret.rolling(30).corr(brent_ret).fillna(0.0)
+        df_t["brent_return_5d"] = df_t["Brent_Close"].pct_change(5).fillna(0.0)
+        df_t["brent_return_20d"] = df_t["Brent_Close"].pct_change(20).fillna(0.0)
     else:
         df_t["corr_brent_30d"] = 0.0
+        df_t["brent_return_5d"] = 0.0
+        df_t["brent_return_20d"] = 0.0
 
     if "USDINR_Close" in df_t.columns:
         usdinr_ret = df_t["USDINR_Close"].pct_change()
         df_t["corr_usdinr_30d"] = stock_ret.rolling(30).corr(usdinr_ret).fillna(0.0)
+        df_t["usdinr_return_20d"] = df_t["USDINR_Close"].pct_change(20).fillna(0.0)
     else:
         df_t["corr_usdinr_30d"] = 0.0
+        df_t["usdinr_return_20d"] = 0.0
+
+    if "India_VIX" in df_t.columns:
+        df_t["vix_change_5d"] = df_t["India_VIX"].diff(5).fillna(0.0)
+    else:
+        df_t["vix_change_5d"] = 0.0
 
     return df_t
 
@@ -319,7 +366,7 @@ def add_categorical_and_dummy_features(df: pd.DataFrame) -> pd.DataFrame:
     df = df.copy()
     dates = pd.to_datetime(df["Date"])
     month = dates.dt.month
-    day_of_week = dates.dt.dayofweek
+    day_of_week = dates.dt.day_of_week if hasattr(dates.dt, "day_of_week") else dates.dt.dayofweek
 
     # Indian Union Budget Indicator (February)
     df["is_budget_month"] = (month == 2).astype(int)
@@ -329,6 +376,13 @@ def add_categorical_and_dummy_features(df: pd.DataFrame) -> pd.DataFrame:
         df["vix_regime_high"] = (df["India_VIX"] > 20.0).astype(int)
     else:
         df["vix_regime_high"] = 0
+
+    # Nifty 50 Trend Regime (Above 50-day SMA)
+    if "Nifty_Close" in df.columns:
+        nifty_sma50 = df["Nifty_Close"].rolling(50).mean()
+        df["nifty_above_sma50"] = (df["Nifty_Close"] > nifty_sma50).fillna(1).astype(int)
+    else:
+        df["nifty_above_sma50"] = 1
 
     # Deterministic Month Dummies (1 to 12)
     for m in range(1, 13):
@@ -466,8 +520,7 @@ class FeatureEngineeringPipeline:
             dropped,
         )
 
-        df_clean.sort_values(by=["Date", "Ticker"], inplace=True)
-        df_clean.reset_index(drop=True, inplace=True)
+        df_clean = df_clean.sort_values(by=["Date", "Ticker"]).reset_index(drop=True)
 
         # Strict Temporal Masks
         train_mask = df_clean["Date"] <= pd.Timestamp("2021-12-31")

@@ -31,5 +31,5 @@ clean:
 	find . -type f -name "*.pyc" -delete
 	find data/raw/ -type f ! -name ".gitkeep" -delete
 	find data/processed/ -type f ! -name ".gitkeep" -delete
-	find models/ -type f -name "*.pkl" -delete
+	find models/ -type f ! -name ".gitkeep" -delete
 	find reports/ -type f ! -name ".gitkeep" -delete

@@ -66,18 +66,20 @@ def get_model_instances() -> Dict[str, Any]:
     """
     models: Dict[str, Any] = {
         "logistic_regression": LogisticRegression(
-            C=1.0,
+            C=0.1,
             max_iter=1000,
             solver="lbfgs",
             random_state=42,
         ),
         "decision_tree": DecisionTreeClassifier(
             max_depth=5,
+            min_samples_leaf=20,
             random_state=42,
         ),
         "random_forest": RandomForestClassifier(
-            n_estimators=100,
-            max_depth=10,
+            n_estimators=150,
+            max_depth=8,
+            min_samples_leaf=20,
             random_state=42,
             n_jobs=-1,
         ),
@@ -87,9 +89,9 @@ def get_model_instances() -> Dict[str, Any]:
     try:
         from xgboost import XGBClassifier
         models["xgboost"] = XGBClassifier(
-            n_estimators=100,
-            max_depth=6,
-            learning_rate=0.05,
+            n_estimators=120,
+            max_depth=4,
+            learning_rate=0.03,
             subsample=0.8,
             colsample_bytree=0.8,
             random_state=42,
@@ -99,17 +101,17 @@ def get_model_instances() -> Dict[str, Any]:
         try:
             from lightgbm import LGBMClassifier
             models["lightgbm"] = LGBMClassifier(
-                n_estimators=100,
-                max_depth=6,
-                learning_rate=0.05,
+                n_estimators=120,
+                max_depth=4,
+                learning_rate=0.03,
                 random_state=42,
             )
         except ImportError:
             from sklearn.ensemble import GradientBoostingClassifier
             models["gradient_boosting"] = GradientBoostingClassifier(
-                n_estimators=100,
-                max_depth=5,
-                learning_rate=0.05,
+                n_estimators=120,
+                max_depth=4,
+                learning_rate=0.03,
                 random_state=42,
             )
 
@@ -276,9 +278,15 @@ class ModelTrainingPipeline:
         X_train = X_train_raw[feature_cols].copy()
         X_val = X_val_raw[feature_cols].copy()
 
-        # 1D Target series for is_positive_growth
-        y_train = y_train_raw["is_positive_growth"].astype(int).values
-        y_val = y_val_raw["is_positive_growth"].astype(int).values
+        # 1D Target series: Prefer target_alpha_outperform for excess return modeling, fallback to is_positive_growth
+        target_col = (
+            "target_alpha_outperform"
+            if "target_alpha_outperform" in y_train_raw.columns
+            else "is_positive_growth"
+        )
+        y_train = y_train_raw[target_col].astype(int).values
+        y_val = y_val_raw[target_col].astype(int).values
+        logger.info("Using target column '%s' for model optimization.", target_col)
 
         logger.info(
             "Data loaded successfully. Features: %d | Train: %d rows | Val: %d rows",
