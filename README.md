@@ -25,47 +25,59 @@ The strategy is validated through a discrete, day-by-day Out-of-Sample simulatio
 
 ```mermaid
 flowchart TD
-    subgraph DataIngestion["Phase 1 & 2: Multi-Source Data Ingestion (src/fetch_data.py)"]
+    subgraph DataIngestion [Phase 1 and 2: Multi-Source Data Ingestion]
         A1["NSE Top 20 Equities (yfinance)"] --> D1["data/raw/nse_equities.parquet"]
         A2["BSE Volume Divergence (yfinance)"] --> D2["data/raw/bse_equities.parquet"]
         A3["Indices: ^NSEI, ^BSESN, ^INDIAVIX"] --> D3["data/raw/indices.parquet"]
         A4["Macro: Brent Crude, Gold, USD/INR, DGS10, FEDFUNDS"] --> D4["data/raw/macro.parquet"]
     end
 
-    subgraph FeaturePipeline["Phase 3: Quantitative Feature Engineering (src/features.py)"]
-        D1 & D2 & D3 & D4 --> F1["Temporal Alignment & ffill() Holiday Imputation"]
+    subgraph FeaturePipeline [Phase 3: Quantitative Feature Engineering]
+        D1 --> F1["Temporal Alignment and Forward-Fill Imputation"]
+        D2 --> F1
+        D3 --> F1
+        D4 --> F1
         F1 --> F2["Technical Indicators: RSI(14), SMA Ratios, Bollinger Bands, Volatility"]
         F2 --> F3["Macro Regimes: Brent Rolling Corr, USD/INR Drift, Budget Encodings"]
-        F3 --> F4["Purge Initial Burn-In & Final 20d Shift Boundary NaNs"]
-        F4 --> F5["Strict Temporal Split: Train (<=2021), Val (2022-23), Test (2024+)"]
+        F3 --> F4["Purge Initial Burn-In and Final 20d Shift Boundary NaNs"]
+        F4 --> F5["Strict Temporal Split: Train (Up to 2021), Val (2022-23), Test (2024+)"]
         F5 --> F6["StandardScaler (Fitted strictly on Train partition)"]
         F6 --> F7["data/processed/ (X_train, y_train, X_val, y_val, X_test, y_test)"]
     end
 
-    subgraph ModelingPipeline["Phase 4: Precision ML Modeling & XAI (src/models.py)"]
+    subgraph ModelingPipeline [Phase 4: Precision ML Modeling and XAI]
         F7 --> M1["Logistic Regression (L2 Baseline)"]
         F7 --> M2["Decision Tree (Depth Constrained)"]
         F7 --> M3["Random Forest Ensemble"]
         F7 --> M4["XGBoost Gradient Boosting"]
         F7 --> M5["MLP Neural Network"]
-        M1 & M2 & M3 & M4 & M5 --> M6["Threshold Sweep: Precision Calibration (T >= 0.60)"]
-        M6 --> M7["SHAP TreeExplainer Local & Global XAI"]
-        M7 --> M8["models/ (Serialized .joblib artifacts) & reports/metrics.json"]
+        M1 --> M6["Threshold Sweep: Precision Calibration (Threshold 0.60)"]
+        M2 --> M6
+        M3 --> M6
+        M4 --> M6
+        M5 --> M6
+        M6 --> M7["SHAP TreeExplainer Local and Global XAI"]
+        M7 --> M8["models/ (Serialized .joblib artifacts) and reports/metrics.json"]
     end
 
-    subgraph SimulationPipeline["Phase 5: Day-by-Day Realistic Backtesting (src/backtest.py)"]
-        M8 & F7 & D1 --> S1["Discrete Day-by-Day Chronological Event Loop"]
+    subgraph SimulationPipeline [Phase 5: Day-by-Day Realistic Backtesting]
+        M8 --> S1["Discrete Day-by-Day Chronological Event Loop"]
+        F7 --> S1
+        D1 --> S1
         S1 --> S2["Portfolio State: INR 1,000,000 Starting Capital, Max 5 Positions (20% Alloc)"]
-        S2 --> S3["Execution: Signal at Close(t) -> Filled at Open(t+1)"]
+        S2 --> S3["Execution: Signal at Close(t) to Fill at Open(t+1)"]
         S3 --> S4["Friction: 0.20% Round-Trip (STT + Turnover + Brokerage + Slippage)"]
         S4 --> S5["Risk Control: -8% Stop Loss (Gap-Down), +15% Take Profit, 20d Time Exit"]
-        S5 --> S6["reports/equity_curve.csv & reports/trade_log.csv"]
+        S5 --> S6["reports/equity_curve.csv and reports/trade_log.csv"]
     end
 
-    subgraph Deployment["Delivery & User Interfaces"]
-        S6 & M8 --> U1["CLI Orchestrator: main.py (fetch, features, train, simulate, run_all)"]
-        S6 & M8 --> U2["Interactive Streamlit Dashboard: dashboard/app.py"]
-        U1 & U2 --> U3["Containerized Docker Environment & Makefile"]
+    subgraph Deployment [Delivery and User Interfaces]
+        S6 --> U1["CLI Orchestrator: main.py"]
+        M8 --> U1
+        S6 --> U2["Interactive Streamlit Dashboard: dashboard/app.py"]
+        M8 --> U2
+        U1 --> U3["Containerized Docker Environment and Makefile"]
+        U2 --> U3
     end
 ```
 
@@ -81,22 +93,35 @@ flowchart TD
 ### 2. Machine Learning Formulation
 The primary objective of NiftyAlpha is to predict whether a top Indian blue-chip equity will generate **positive alpha outperformance** relative to the Nifty 50 benchmark index over a 20-trading-day forward holding horizon (approximately one calendar month).
 
-1. **Individual Equity Forward Return**:
-$$R_{\text{stock}}(t, t+20) = \frac{\text{Close}_{\text{stock}}(t+20) - \text{Close}_{\text{stock}}(t)}{\text{Close}_{\text{stock}}(t)}$$
+#### 1. Individual Equity Forward Return
+$$
+R_{\text{stock}}(t, t+20) = \frac{\text{Close}_{\text{stock}}(t+20) - \text{Close}_{\text{stock}}(t)}{\text{Close}_{\text{stock}}(t)}
+$$
 
-2. **Benchmark Forward Return (Nifty 50 Index)**:
-$$R_{\text{nifty}}(t, t+20) = \frac{\text{Close}_{\text{nifty}}(t+20) - \text{Close}_{\text{nifty}}(t)}{\text{Close}_{\text{nifty}}(t)}$$
+#### 2. Benchmark Forward Return (Nifty 50 Index)
+$$
+R_{\text{nifty}}(t, t+20) = \frac{\text{Close}_{\text{nifty}}(t+20) - \text{Close}_{\text{nifty}}(t)}{\text{Close}_{\text{nifty}}(t)}
+$$
 
-3. **Excess Alpha Outperformance Return**:
-$$\text{Excess Return}(t, t+20) = R_{\text{stock}}(t, t+20) - R_{\text{nifty}}(t, t+20)$$
+#### 3. Excess Alpha Outperformance Return
+$$
+\text{Excess Return}(t, t+20) = R_{\text{stock}}(t, t+20) - R_{\text{nifty}}(t, t+20)
+$$
 
-4. **Binary Classification Target (`target_alpha_outperform`)**:
-$$\text{Target}(t) = \begin{cases} 1 & \text{if } \text{Excess Return}(t, t+20) > 0 \;\text{ and }\; R_{\text{stock}}(t, t+20) > 0 \\ 0 & \text{otherwise} \end{cases}$$
+#### 4. Binary Classification Target (`target_alpha_outperform`)
+$$
+\text{Target}(t) = \begin{cases} 
+1 & \text{if } \text{Excess Return}(t, t+20) > 0 \quad\text{and}\quad R_{\text{stock}}(t, t+20) > 0 \\ 
+0 & \text{otherwise} 
+\end{cases}
+$$
 
 ### 3. The Precision-First Quantitative Imperative
 Standard machine learning models frequently prioritize balanced **Accuracy** or **ROC-AUC**. In quantitative trading, prediction errors carry asymmetric financial costs:
 
-$$\text{Precision} = \frac{\text{True Positives}}{\text{True Positives} + \text{False Positives}}$$
+$$
+\text{Precision} = \frac{\text{True Positives}}{\text{True Positives} + \text{False Positives}}
+$$
 
 - **False Positive (Type I Error)**: The model issues a buy signal, but the stock subsequently depreciates or underperforms. The portfolio suffers immediate capital drawdown, bid-ask spread slippage, and statutory Indian Securities Transaction Tax (STT). **False positives destroy real trading capital.**
 - **False Negative (Type II Error)**: The model misses an uptrend. The portfolio simply maintains cash or accrues the 7.0% sovereign risk-free rate. **False negatives represent missed upside, not capital loss.**
@@ -191,14 +216,14 @@ Academic backtests frequently inflate performance by assuming zero slippage, imm
 
 The `notebooks/` directory contains three fully executed, publication-grade Jupyter research notebooks (each containing 20+ structured cells with mathematical formulations, code, and persisted high-resolution visualizations):
 
-### 1. [01_eda_and_data.ipynb](file:///e:/Code/Projects/Major%20Projects/Programs%20&%20Cohorts/NiftyAlpha/notebooks/01_eda_and_data.ipynb) — Multi-Universe Ingestion, Cross-Asset EDA & Statistical Stationarity
+### 1. [01_eda_and_data.ipynb](notebooks/01_eda_and_data.ipynb) — Multi-Universe Ingestion, Cross-Asset EDA & Statistical Stationarity
 - **Multi-Source Sourcing**: 20 NSE blue-chips, BSE volume divergence, indices (`^NSEI`, `^BSESN`, `^INDIAVIX`), and macro indicators (Brent Crude `BZ=F`, USD/INR `INR=X`, US 10Y Yields `DGS10`, Gold `GC=F`).
 - **Calendar Reconciliation**: Indian vs. US holiday misalignment audit and lookahead-free forward-fill (`ffill()`).
 - **Visual Analytics**: 10-year cumulative equity growth, cross-asset correlation matrix, returns distribution & QQ fat-tail normality analysis.
 - **Statistical Rigor**: Pure-NumPy/SciPy Augmented Dickey-Fuller (ADF) unit-root stationarity tests proving price non-stationarity ($I(1)$) and return stationarity ($I(0)$).
 - **Alternative Data**: BSE vs. NSE volume divergence as an institutional liquidity indicator, and India VIX regime distributions.
 
-### 2. [02_model_experiments.ipynb](file:///e:/Code/Projects/Major%20Projects/Programs%20&%20Cohorts/NiftyAlpha/notebooks/02_model_experiments.ipynb) — Machine Learning Prototyping, Walk-Forward Validation & XAI
+### 2. [02_model_experiments.ipynb](notebooks/02_model_experiments.ipynb) — Machine Learning Prototyping, Walk-Forward Validation & XAI
 - **Precision-First Formulation**: Rigorous quantitative justification for optimizing precision over accuracy (false-positive buy errors directly deplete trading capital).
 - **Walk-Forward Validation**: Chronological temporal splitting (Train $\le$ 2021, Val 2022–2023, Test 2024+) combined with a 5-fold `TimeSeriesSplit` cross-validation scheme to prevent future lookahead bias.
 - **Multi-Architecture Benchmark**: Comparative evaluation of 5 architectures (Logistic Regression, Decision Tree, Random Forest, XGBoost, and MLP Neural Network) across ROC-AUC, PR-AUC, F1, and signal generation.
@@ -206,7 +231,7 @@ The `notebooks/` directory contains three fully executed, publication-grade Jupy
 - **Diagnostic Curves**: Side-by-side ROC and Precision-Recall curves, alongside a reliability calibration diagram.
 - **Explainable AI (XAI)**: Global SHAP beeswarm summary plots, feature dependence interactions, and local force/waterfall plots explaining individual trade decisions.
 
-### 3. [03_trading_simulation.ipynb](file:///e:/Code/Projects/Major%20Projects/Programs%20&%20Cohorts/NiftyAlpha/notebooks/03_trading_simulation.ipynb) — Realistic Execution Backtesting & Out-of-Sample Performance
+### 3. [03_trading_simulation.ipynb](notebooks/03_trading_simulation.ipynb) — Realistic Execution Backtesting & Out-of-Sample Performance
 - **Microstructure Constraints**: ₹1,000,000 capital, 5 concurrent position limit (20% sizing), $t+1$ market open execution, 0.20% round-trip friction (brokerage + STT), and gap-down stop loss fills.
 - **Execution Audit**: Comprehensive trade log analysis breaking down exit mechanisms (Take-Profit vs. Trailing Breakeven vs. Stop-Loss vs. Time Exit).
 - **Comprehensive Benchmarking**: Strategy equity curve vs. Nifty 50 Buy-and-Hold benchmark with cumulative alpha spread.
@@ -247,19 +272,19 @@ This project was built to satisfy all criteria of the DataTalksClub Stock Market
 
 | Rubric Criteria | Project Implementation & Evidence | Exact File / Notebook Reference |
 | :--- | :--- | :--- |
-| **Problem Description** | Emerging market dynamics (NSE/BSE), crude oil import sensitivity, precision vs. accuracy quantitative rationale, Nifty 50 benchmarking. | [README.md](file:///e:/Code/Projects/Major%20Projects/Programs%20&%20Cohorts/NiftyAlpha/README.md#L30-L60)<br>[01_eda_and_data.ipynb](file:///e:/Code/Projects/Major%20Projects/Programs%20&%20Cohorts/NiftyAlpha/notebooks/01_eda_and_data.ipynb#L4-L7) |
-| **Data Sourcing** | Multi-source ingestion: NSE Top 20 equities, BSE alternative volume, 3 market indices, and 5 global macro indicators from Yahoo Finance & FRED. | [src/fetch_data.py](file:///e:/Code/Projects/Major%20Projects/Programs%20&%20Cohorts/NiftyAlpha/src/fetch_data.py#L40-L180)<br>[01_eda_and_data.ipynb](file:///e:/Code/Projects/Major%20Projects/Programs%20&%20Cohorts/NiftyAlpha/notebooks/01_eda_and_data.ipynb#L18-L26) |
-| **EDA & Feature Engineering** | Holiday alignment via forward-fill (`ffill()`), RSI(14), Moving Average ratios, Brent rolling correlations, Union Budget encodings, boundary pruning. | [src/features.py](file:///e:/Code/Projects/Major%20Projects/Programs%20&%20Cohorts/NiftyAlpha/src/features.py#L90-L420)<br>[01_eda_and_data.ipynb](file:///e:/Code/Projects/Major%20Projects/Programs%20&%20Cohorts/NiftyAlpha/notebooks/01_eda_and_data.ipynb#L30-L58) |
-| **Validation Strategy** | Strict chronological partitioning (Train $\le$ 2021, Val 2022–2023, Test 2024+); StandardScaler fitted strictly on Train split without leakage. | [src/features.py](file:///e:/Code/Projects/Major%20Projects/Programs%20&%20Cohorts/NiftyAlpha/src/features.py#L460-L510)<br>[02_model_experiments.ipynb](file:///e:/Code/Projects/Major%20Projects/Programs%20&%20Cohorts/NiftyAlpha/notebooks/02_model_experiments.ipynb#L18-L26) |
-| **Model Prototyping** | Comparison of 5 models: Logistic Regression baseline, Decision Tree, Random Forest, XGBoost, and MLP Neural Network. | [src/models.py](file:///e:/Code/Projects/Major%20Projects/Programs%20&%20Cohorts/NiftyAlpha/src/models.py#L120-L240)<br>[02_model_experiments.ipynb](file:///e:/Code/Projects/Major%20Projects/Programs%20&%20Cohorts/NiftyAlpha/notebooks/02_model_experiments.ipynb#L28-L34) |
-| **Evaluation Metrics** | Precision-Recall curve analysis, probability threshold sweeps ($0.50$ to $0.65$), ROC-AUC, PR-AUC, F1-Score, and signal frequency. | [src/models.py](file:///e:/Code/Projects/Major%20Projects/Programs%20&%20Cohorts/NiftyAlpha/src/models.py#L250-L320)<br>[reports/metrics.json](file:///e:/Code/Projects/Major%20Projects/Programs%20&%20Cohorts/NiftyAlpha/reports/metrics.json) |
-| **Explainable AI (XAI)** | TreeExplainer SHAP summary plots and feature importance rankings isolating predictive drivers. | [src/models.py](file:///e:/Code/Projects/Major%20Projects/Programs%20&%20Cohorts/NiftyAlpha/src/models.py#L330-L380)<br>[02_model_experiments.ipynb](file:///e:/Code/Projects/Major%20Projects/Programs%20&%20Cohorts/NiftyAlpha/notebooks/02_model_experiments.ipynb#L50-L58) |
-| **Realistic Backtesting** | Day-by-day discrete chronological loop, 0.20% round-trip friction (STT + brokerage), max 5 positions, -8% Stop-Loss (with gap fill), +15% Take-Profit. | [src/backtest.py](file:///e:/Code/Projects/Major%20Projects/Programs%20&%20Cohorts/NiftyAlpha/src/backtest.py#L120-L400)<br>[03_trading_simulation.ipynb](file:///e:/Code/Projects/Major%20Projects/Programs%20&%20Cohorts/NiftyAlpha/notebooks/03_trading_simulation.ipynb#L4-L46) |
-| **Strategy Benchmarking** | Full comparative metrics vs. Buy & Hold on Nifty 50 Index (`^NSEI`): CAGR, Max Drawdown, Annualized Sharpe (Rf=7%), Win Rate, Profit Factor. | [src/backtest.py](file:///e:/Code/Projects/Major%20Projects/Programs%20&%20Cohorts/NiftyAlpha/src/backtest.py#L410-L490)<br>[reports/equity_curve.csv](file:///e:/Code/Projects/Major%20Projects/Programs%20&%20Cohorts/NiftyAlpha/reports/equity_curve.csv) |
-| **CLI Orchestration** | Clean argparse router supporting individual commands (`fetch`, `features`, `train`, `simulate`) and end-to-end pipeline execution (`run_all`). | [main.py](file:///e:/Code/Projects/Major%20Projects/Programs%20&%20Cohorts/NiftyAlpha/main.py#L35-L154) |
-| **Interactive UI** | 3-tab Streamlit dashboard: Live Signals, Plotly Equity Curve & Trade Audit, SHAP Feature Importance. | [dashboard/app.py](file:///e:/Code/Projects/Major%20Projects/Programs%20&%20Cohorts/NiftyAlpha/dashboard/app.py#L170-L450) |
-| **Containerization** | Production multi-stage Dockerfile compiling C TA-Lib and installing locked requirements. | [Dockerfile](file:///e:/Code/Projects/Major%20Projects/Programs%20&%20Cohorts/NiftyAlpha/Dockerfile#L1-L41) |
-| **Automated Testing** | 17 unit tests verifying ingestion, features, modeling, thresholding, simulation logic, and dashboard loaders. | [tests/](file:///e:/Code/Projects/Major%20Projects/Programs%20&%20Cohorts/NiftyAlpha/tests/) |
+| **Problem Description** | Emerging market dynamics (NSE/BSE), crude oil import sensitivity, precision vs. accuracy quantitative rationale, Nifty 50 benchmarking. | [README.md](README.md#L30-L60)<br>[01_eda_and_data.ipynb](notebooks/01_eda_and_data.ipynb) |
+| **Data Sourcing** | Multi-source ingestion: NSE Top 20 equities, BSE alternative volume, 3 market indices, and 5 global macro indicators from Yahoo Finance & FRED. | [src/fetch_data.py](src/fetch_data.py)<br>[01_eda_and_data.ipynb](notebooks/01_eda_and_data.ipynb) |
+| **EDA & Feature Engineering** | Holiday alignment via forward-fill (`ffill()`), RSI(14), Moving Average ratios, Brent rolling correlations, Union Budget encodings, boundary pruning. | [src/features.py](src/features.py)<br>[01_eda_and_data.ipynb](notebooks/01_eda_and_data.ipynb) |
+| **Validation Strategy** | Strict chronological partitioning (Train $\le$ 2021, Val 2022–2023, Test 2024+); StandardScaler fitted strictly on Train split without leakage. | [src/features.py](src/features.py)<br>[02_model_experiments.ipynb](notebooks/02_model_experiments.ipynb) |
+| **Model Prototyping** | Comparison of 5 models: Logistic Regression baseline, Decision Tree, Random Forest, XGBoost, and MLP Neural Network. | [src/models.py](src/models.py)<br>[02_model_experiments.ipynb](notebooks/02_model_experiments.ipynb) |
+| **Evaluation Metrics** | Precision-Recall curve analysis, probability threshold sweeps ($0.50$ to $0.65$), ROC-AUC, PR-AUC, F1-Score, and signal frequency. | [src/models.py](src/models.py)<br>[reports/metrics.json](reports/metrics.json) |
+| **Explainable AI (XAI)** | TreeExplainer SHAP summary plots and feature importance rankings isolating predictive drivers. | [src/models.py](src/models.py)<br>[02_model_experiments.ipynb](notebooks/02_model_experiments.ipynb) |
+| **Realistic Backtesting** | Day-by-day discrete chronological loop, 0.20% round-trip friction (STT + brokerage), max 5 positions, -8% Stop-Loss (with gap fill), +15% Take-Profit. | [src/backtest.py](src/backtest.py)<br>[03_trading_simulation.ipynb](notebooks/03_trading_simulation.ipynb) |
+| **Strategy Benchmarking** | Full comparative metrics vs. Buy & Hold on Nifty 50 Index (`^NSEI`): CAGR, Max Drawdown, Annualized Sharpe (Rf=7%), Win Rate, Profit Factor. | [src/backtest.py](src/backtest.py)<br>[reports/equity_curve.csv](reports/equity_curve.csv) |
+| **CLI Orchestration** | Clean argparse router supporting individual commands (`fetch`, `features`, `train`, `simulate`) and end-to-end pipeline execution (`run_all`). | [main.py](main.py) |
+| **Interactive UI** | 3-tab Streamlit dashboard: Live Signals, Plotly Equity Curve & Trade Audit, SHAP Feature Importance. | [dashboard/app.py](dashboard/app.py) |
+| **Containerization** | Production multi-stage Dockerfile compiling C TA-Lib and installing locked requirements. | [Dockerfile](Dockerfile) |
+| **Automated Testing** | 17 unit tests verifying ingestion, features, modeling, thresholding, simulation logic, and dashboard loaders. | [tests/](tests/) |
 
 ---
 
