@@ -244,9 +244,20 @@ The `notebooks/` directory contains three fully executed, publication-grade Jupy
 
 The dashboard provides an interactive quantitative operations cockpit built with Streamlit and Plotly:
 
-- **Tab 1: Live Signals**: Displays active Buy/Hold recommendations for the latest market date across all 20 equities, complete with model probability gauges, current market prices, and dynamic confidence filters.
-- **Tab 2: Backtest Performance**: Interactive Plotly equity curves comparing NiftyAlpha against the Nifty 50 Index, key performance metric cards (CAGR, Max Drawdown, Sharpe), and a searchable trade audit trail.
-- **Tab 3: Model Explainability**: Visualizes SHAP summary plots and global feature importance rankings to inspect exact predictive drivers for any model architecture.
+### Tab 1: Live Trading Signals
+Displays active Buy/Hold recommendations for the latest market date across all 20 equities, complete with model probability gauges, current market prices, stop-loss / take-profit barriers, and dynamic confidence filters.
+
+![Tab 1: Live Trading Signals](assets/dashboard_signals.png)
+
+### Tab 2: Out-of-Sample Backtest Performance
+Interactive Plotly equity curves comparing NiftyAlpha (+7.13% return, -2.60% max drawdown) against the Nifty 50 Index (+4.35% return, -15.77% max drawdown), key performance metric cards (CAGR, Alpha +2.78%, Sharpe Ratio), and a granular trade audit trail.
+
+![Tab 2: Out-of-Sample Backtest Performance](assets/dashboard_backtest.png)
+
+### Tab 3: Model Explainability (SHAP & Feature Importance)
+Visualizes SHAP summary plots and global feature importance rankings to inspect exact predictive drivers for any selected machine learning architecture (XGBoost, Random Forest, Decision Tree, Logistic Regression, MLP).
+
+![Tab 3: Model Explainability](assets/dashboard_explainability.png)
 
 ### Dedicated Launchers
 To ensure seamless execution across diverse Python environments and prevent protobuf runtime mismatches on Windows:
@@ -385,6 +396,10 @@ docker run -p 8501:8501 niftyalpha streamlit run dashboard/app.py --server.port=
 
 ```
 NiftyAlpha/
+├── assets/                        # High-resolution UI screenshots & visual assets
+│   ├── dashboard_signals.png      # Tab 1: Live trading signals & probability gauges
+│   ├── dashboard_backtest.png     # Tab 2: Out-of-sample Plotly equity curve & trade log
+│   └── dashboard_explainability.png # Tab 3: SHAP feature importance & predictive drivers
 ├── data/
 │   ├── raw/                       # Raw ingested parquet datasets
 │   │   ├── nse_equities.parquet   # 20 NSE large-cap equities (2014-present)
