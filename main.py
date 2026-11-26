@@ -73,7 +73,7 @@ def run_train() -> None:
     logger.info(">>> [Phase 4/5] Model Training Completed.")
 
 
-def run_simulate(threshold: float = 0.52) -> None:
+def run_simulate(threshold: float = 0.525) -> None:
     """Executes Phase 5: Realistic Trading Simulation."""
     logger.info(">>> [Phase 5/5] Initiating Day-by-Day Trading Simulation...")
     from src.backtest import BacktestPipeline
@@ -89,7 +89,7 @@ def run_simulate(threshold: float = 0.52) -> None:
     logger.info(">>> [Phase 5/5] Trading Simulation Completed.")
 
 
-def run_all(force: bool = False, threshold: float = 0.52) -> None:
+def run_all(force: bool = False, threshold: float = 0.525) -> None:
     """Executes all pipeline phases sequentially."""
     start_time = time.time()
     banner = "=" * 70
@@ -129,12 +129,12 @@ def main() -> None:
 
     # Subcommand: simulate
     p_sim = subparsers.add_parser("simulate", help="Run day-by-day backtest simulation on test set")
-    p_sim.add_argument("--threshold", type=float, default=0.60, help="Confidence threshold for buy signals")
+    p_sim.add_argument("--threshold", type=float, default=0.525, help="Confidence threshold for buy signals")
 
     # Subcommand: run_all
     p_all = subparsers.add_parser("run_all", help="Execute complete pipeline end-to-end")
     p_all.add_argument("--force", action="store_true", default=False, help="Force fresh download during fetch stage")
-    p_all.add_argument("--threshold", type=float, default=0.60, help="Confidence threshold for buy signals")
+    p_all.add_argument("--threshold", type=float, default=0.525, help="Confidence threshold for buy signals")
 
     args = parser.parse_args()
 

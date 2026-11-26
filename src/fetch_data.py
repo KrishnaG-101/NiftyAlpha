@@ -5,7 +5,7 @@ Production-grade data ingestion pipeline for the Indian Equity Market and
 macroeconomic drivers.
 
 Data Universes:
-1. NSE Equities: Top 20 liquid Nifty 50 stocks (.NS)
+1. NSE Equities: Full Nifty 50 constituents (.NS)
 2. BSE Equities: Corresponding BSE listings (.BO)
 3. Indices: Nifty 50 (^NSEI), BSE Sensex (^BSESN), India VIX (^INDIAVIX)
 4. Macro/Commodities: Brent Crude (BZ=F), Gold (GC=F), USD/INR (INR=X)
@@ -48,10 +48,18 @@ DEFAULT_RAW_DATA_DIR = PROJECT_ROOT / "data" / "raw"
 # ==============================================================================
 
 NSE_EQUITY_TICKERS: List[str] = [
+    # Top Mega-Caps (Original 20)
     "RELIANCE.NS", "TCS.NS", "HDFCBANK.NS", "INFY.NS", "ICICIBANK.NS",
     "HINDUNILVR.NS", "ITC.NS", "SBIN.NS", "BHARTIARTL.NS", "KOTAKBANK.NS",
     "LT.NS", "AXISBANK.NS", "ASIANPAINT.NS", "MARUTI.NS", "SUNPHARMA.NS",
     "TITAN.NS", "BAJFINANCE.NS", "TATASTEEL.NS", "M&M.NS", "HCLTECH.NS",
+    # Additional Nifty 50 Constituents (Expanded 30)
+    "NTPC.NS", "POWERGRID.NS", "ONGC.NS", "BPCL.NS", "COALINDIA.NS",
+    "IOC.NS", "ULTRACEMCO.NS", "GRASIM.NS", "HINDALCO.NS", "JSWSTEEL.NS",
+    "CIPLA.NS", "DRREDDY.NS", "DIVISLAB.NS", "APOLLOHOSP.NS", "BRITANNIA.NS",
+    "NESTLEIND.NS", "TATACONSUM.NS", "BAJAJ-AUTO.NS", "EICHERMOT.NS", "HEROMOTOCO.NS",
+    "BAJAJFINSV.NS", "SHRIRAMFIN.NS", "INDUSINDBK.NS", "HDFCLIFE.NS", "SBILIFE.NS",
+    "TECHM.NS", "WIPRO.NS", "ADANIENT.NS", "ADANIPORTS.NS", "TRENT.NS",
 ]
 
 BSE_EQUITY_TICKERS: List[str] = [
@@ -318,7 +326,7 @@ class DataIngestionPipeline:
 
     def fetch_nse_equities(self, force: bool = False) -> Path:
         """
-        Fetches the top 20 liquid NSE equities, saving to data/raw/nse_equities.parquet.
+        Fetches all 50 Nifty equities, saving to data/raw/nse_equities.parquet.
         """
         target_path = self.raw_data_dir / "nse_equities.parquet"
         if target_path.exists() and not force:
@@ -336,7 +344,7 @@ class DataIngestionPipeline:
 
     def fetch_bse_equities(self, force: bool = False) -> Path:
         """
-        Fetches the top 20 liquid BSE equities (.BO), saving to data/raw/bse_equities.parquet.
+        Fetches the corresponding BSE equities (.BO), saving to data/raw/bse_equities.parquet.
         """
         target_path = self.raw_data_dir / "bse_equities.parquet"
         if target_path.exists() and not force:

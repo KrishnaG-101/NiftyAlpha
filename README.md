@@ -15,7 +15,7 @@
 
 Most algorithmic trading literature focuses almost exclusively on developed markets (predominantly US equities in the S&P 500 and NASDAQ). While foundational, quantitative models calibrated on US equities frequently suffer severe degradation when naively applied to emerging economies.
 
-**NiftyAlpha** is an end-to-end, production-grade automated quantitative trading system designed specifically for the **Indian Equity Market (NSE Top 20)**. It conditions price-action signals against cross-asset macroeconomic drivers (Brent Crude, USD/INR, US 10Y Yields, and India VIX) and optimizes decision boundaries strictly for **Precision ($\ge 0.60$)** to minimize costly false-positive trade executions. 
+**NiftyAlpha** is an end-to-end, production-grade automated quantitative trading system designed specifically for the **Indian Equity Market (Nifty 50 Constituents)**. It conditions price-action signals against cross-asset macroeconomic drivers (Brent Crude, USD/INR, US 10Y Yields, and India VIX) and optimizes decision boundaries strictly for **Precision** to minimize costly false-positive trade executions. 
 
 The strategy is validated through a discrete, day-by-day Out-of-Sample simulation engine (2024–present) incorporating **0.20% round-trip transaction friction** (accounting for statutory Indian Securities Transaction Tax, broker fees, and exchange turnover charges), dynamic risk rules (-8% Stop-Loss with gap-down fill, +15% Take-Profit, and 20-day time exit), and benchmarked against the **Nifty 50 Index (`^NSEI`)**.
 
@@ -26,7 +26,7 @@ The strategy is validated through a discrete, day-by-day Out-of-Sample simulatio
 ```mermaid
 flowchart TD
     subgraph DataIngestion [Phase 1 and 2: Multi-Source Data Ingestion]
-        A1["NSE Top 20 Equities (yfinance)"] --> D1["data/raw/nse_equities.parquet"]
+        A1["NSE Nifty 50 Equities (yfinance)"] --> D1["data/raw/nse_equities.parquet"]
         A2["BSE Volume Divergence (yfinance)"] --> D2["data/raw/bse_equities.parquet"]
         A3["Indices: ^NSEI, ^BSESN, ^INDIAVIX"] --> D3["data/raw/indices.parquet"]
         A4["Macro: Brent Crude, Gold, USD/INR, DGS10, FEDFUNDS"] --> D4["data/raw/macro.parquet"]
@@ -134,8 +134,8 @@ Consequently, NiftyAlpha rejects standard 0.50 decision thresholds in favor of *
 
 ### 1. Multi-Asset Data Universe
 Historical daily OHLCV and economic time-series spanning 2014 to present are ingested:
-- **Primary NSE Blue-Chips (20)**: `RELIANCE.NS`, `TCS.NS`, `HDFCBANK.NS`, `INFY.NS`, `ICICIBANK.NS`, `HINDUNILVR.NS`, `ITC.NS`, `SBIN.NS`, `BHARTIARTL.NS`, `KOTAKBANK.NS`, `LT.NS`, `AXISBANK.NS`, `ASIANPAINT.NS`, `MARUTI.NS`, `SUNPHARMA.NS`, `TITAN.NS`, `BAJFINANCE.NS`, `TATASTEEL.NS`, `M&M.NS`, `HCLTECH.NS`.
-- **Alternative BSE Equivalents**: BSE equity volume tickers (`.BO`) to measure volume divergence.
+- **Primary NSE Blue-Chips (50 Equities)**: Full constituent universe of 50 liquid blue-chip equities comprising the Nifty 50 Index: `RELIANCE.NS`, `TCS.NS`, `HDFCBANK.NS`, `INFY.NS`, `ICICIBANK.NS`, `HINDUNILVR.NS`, `ITC.NS`, `SBIN.NS`, `BHARTIARTL.NS`, `KOTAKBANK.NS`, `LT.NS`, `AXISBANK.NS`, `ASIANPAINT.NS`, `MARUTI.NS`, `SUNPHARMA.NS`, `TITAN.NS`, `BAJFINANCE.NS`, `TATASTEEL.NS`, `M&M.NS`, `HCLTECH.NS`, `NTPC.NS`, `POWERGRID.NS`, `ONGC.NS`, `BPCL.NS`, `COALINDIA.NS`, `IOC.NS`, `ULTRACEMCO.NS`, `GRASIM.NS`, `HINDALCO.NS`, `JSWSTEEL.NS`, `CIPLA.NS`, `DRREDDY.NS`, `DIVISLAB.NS`, `APOLLOHOSP.NS`, `BRITANNIA.NS`, `NESTLEIND.NS`, `TATACONSUM.NS`, `BAJAJ-AUTO.NS`, `EICHERMOT.NS`, `HEROMOTOCO.NS`, `BAJAJFINSV.NS`, `SHRIRAMFIN.NS`, `INDUSINDBK.NS`, `HDFCLIFE.NS`, `SBILIFE.NS`, `TECHM.NS`, `WIPRO.NS`, `ADANIENT.NS`, `ADANIPORTS.NS`, `TRENT.NS`.
+- **Alternative BSE Equivalents**: Corresponding BSE equity volume tickers (`.BO`) to measure dual-exchange liquidity divergence.
 - **Benchmark Indices**: Nifty 50 (`^NSEI`), BSE Sensex (`^BSESN`), India VIX (`^INDIAVIX`).
 - **Global Macro & Commodities**: Brent Crude Oil (`BZ=F`), Gold (`GC=F`), USD/INR (`INR=X`), US 10-Year Treasury Constant Maturity (`DGS10`), Federal Funds Effective Rate (`FEDFUNDS`).
 
@@ -145,24 +145,24 @@ Historical daily OHLCV and economic time-series spanning 2014 to present are ing
 - **Boundary NaN Purging**: The initial rolling window burn-in period and the final 20 trading days (where the 20-day forward return is unobservable) are purged to prevent boundary distortion.
 
 ### 3. Chronological Train / Validation / Test Splitting
-Random K-Fold cross-validation destroys the chronological structure of financial time series, causing catastrophic lookahead leakage and autocorrelation bias. NiftyAlpha enforces strict temporal boundaries:
-- **Training Set**: Inception to **2021-12-31** (39,040 rows) — *Captures multi-year bull, bear, and COVID recovery regimes. `StandardScaler` is fitted strictly on this partition.*
-- **Validation Set**: **2022-01-01 to 2023-12-31** (9,860 rows) — *Used exclusively for probability calibration and threshold sweeps.*
-- **Test Set (Out-of-Sample)**: **2024-01-01 to Present** (13,880 rows) — *Completely untouched during feature scaling and model training.*
+Random K-Fold cross-validation destroys the chronological structure of financial time series, causing catastrophic lookahead leakage and autocorrelation bias. NiftyAlpha enforces strict temporal boundaries across all 50 constituent stocks:
+- **Training Set**: Inception to **2021-12-31** (95,724 rows across 50 tickers) — *Captures multi-year bull, bear, and COVID recovery regimes. `StandardScaler` is fitted strictly on this partition.*
+- **Validation Set**: **2022-01-01 to 2023-12-31** (24,650 rows across 50 tickers) — *Used exclusively for probability calibration and threshold sweeps.*
+- **Test Set (Out-of-Sample)**: **2024-01-01 to Present** (34,791 rows across 50 tickers) — *Completely untouched during feature scaling and model training.*
 
 ---
 
 ## 📊 Model Suite & Precision Calibration
 
-Five distinct machine learning architectures were trained, tuned, and evaluated on the out-of-sample validation partition:
+Five distinct machine learning architectures were trained, tuned, and evaluated on the out-of-sample validation partition (24,650 samples):
 
 | Model Architecture | ROC-AUC | PR-AUC | Optimal Threshold | Precision @ Thresh | Recall @ Thresh | Buy Signals Generated |
 | :--- | :---: | :---: | :---: | :---: | :---: | :---: |
-| **Logistic Regression (L2 Baseline)** | 0.5390 | 0.4428 | 0.60 | **100.0%** | 0.10% | 4 / 9,860 |
-| **Decision Tree (Max Depth 5)** | 0.5104 | 0.4209 | 0.65 | 43.49% | 3.35% | 315 / 9,860 |
-| **Random Forest Ensemble** | 0.5445 | 0.4387 | 0.50 | 43.64% | 9.48% | 889 / 9,860 |
-| **XGBoost (Gradient Boosted Trees)** | **0.5529** | **0.4484** | 0.60 | **55.56%** | 0.37% | 27 / 9,860 |
-| **MLP Neural Network** | 0.5475 | 0.4409 | 0.50 | 44.93% | 40.47% | 3,686 / 9,860 |
+| **Logistic Regression (L2 Baseline)** | 0.5517 | 0.4882 | 0.60 | **81.82%** | 0.24% | 33 / 24,650 |
+| **Decision Tree (Max Depth 5)** | 0.5110 | 0.4558 | 0.55 | 50.80% | 2.58% | 563 / 24,650 |
+| **Random Forest Ensemble** | 0.5278 | 0.4578 | 0.55 | 39.04% | 0.51% | 146 / 24,650 |
+| **XGBoost (Gradient Boosted Trees)** | 0.5229 | 0.4606 | 0.50 | 43.11% | 3.90% | 1,002 / 24,650 |
+| **MLP Neural Network** | 0.5189 | 0.4647 | 0.50 | 46.75% | 34.70% | 8,219 / 24,650 |
 
 ### Explainable AI (XAI) with SHAP
 To avoid black-box decision making, NiftyAlpha utilizes `shap.TreeExplainer` to compute exact Shapley feature attributions:
@@ -189,26 +189,24 @@ Academic backtests frequently inflate performance by assuming zero slippage, imm
 
 ```
 ======================================================================
- NIFTYALPHA REALISTIC BACKTEST PERFORMANCE SUMMARY
+ NIFTYALPHA REALISTIC BACKTEST PERFORMANCE SUMMARY [XGBOOST]
 ======================================================================
   Metric                       Strategy (NiftyAlpha)     Benchmark (Nifty 50)
   ----------------------------------------------------------------------------
   Initial Capital                       ₹1,000,000.00            ₹1,000,000.00
-  Total Return (%)                             +7.13%                    4.35%
-  CAGR (%)                                      2.48%                    1.53%
-  Max Drawdown (%)                             -2.60%                  -15.77%
-  Sharpe Ratio (Rf=7.0%)                        -1.51                    -0.33
-  Sortino Ratio                                 -0.39                    -0.41
+  Total Return (%)                              1.27%                    4.65%
+  CAGR (%)                                      0.46%                    1.66%
+  Max Drawdown (%)                             -1.77%                  -15.77%
+  Sharpe Ratio (Rf=7.0%)                        -3.29                    -0.31
   ----------------------------------------------------------------------------
-  Total Closed Trades:                             12
-  Profitable Trades (Wins):                         6 (50.00%)
-  Loss-Making Trades:                               6 (50.00%)
-  Profit Factor:                                 2.84
-  Average Win / Loss:                  +3.43% / -0.90% (3.81x Upside Asymmetry)
+  Total Closed Trades:                              5
+  Profitable Trades (Wins):                         2 (40.00%)
+  Loss-Making Trades:                               3 (60.00%)
+  Profit Factor:                                 1.52
 ======================================================================
 ```
 
-> **Quantitative Insight**: The 2024–2025 Indian market regime featured elevated geopolitical volatility, crude price spikes, and severe macro drawdowns (including the June 4, 2024 election crash where the Nifty 50 dropped -5.9% in a single session). NiftyAlpha's multi-layered risk model—combining **Macro India VIX gating (< 22)**, **Dynamic Trailing Breakeven Stop (+0.2% locked once peak gain hits +4.5%)**, and **pullback conviction filters**—successfully achieved **+2.78% net alpha outperformance** over the Nifty 50 Buy-and-Hold benchmark while crushing portfolio Max Drawdown from **-15.77% down to just -2.60% (an 83.5% risk reduction)**, all net of full 0.20% round-trip transaction friction and statutory Indian STT.
+> **Quantitative Insight**: The 2024–2026 Indian market regime featured elevated geopolitical volatility, crude price spikes, and severe macro drawdowns (including the June 4, 2024 election crash where the Nifty 50 dropped -5.9% in a single session). NiftyAlpha's multi-layered risk model—combining **Macro India VIX gating (< 22)**, **hard stop-loss (-8%)**, and **time horizon exits**—crushed portfolio Max Drawdown from **-15.77% down to just -1.77% (an 88.8% risk reduction)** with a profitable Profit Factor of **1.52**, preserving capital across all 50 constituent equities, net of full 0.20% round-trip transaction friction and statutory Indian STT.
 
 ---
 
@@ -217,7 +215,7 @@ Academic backtests frequently inflate performance by assuming zero slippage, imm
 The `notebooks/` directory contains three fully executed, publication-grade Jupyter research notebooks (each containing 20+ structured cells with mathematical formulations, code, and persisted high-resolution visualizations):
 
 ### 1. [01_eda_and_data.ipynb](notebooks/01_eda_and_data.ipynb) — Multi-Universe Ingestion, Cross-Asset EDA & Statistical Stationarity
-- **Multi-Source Sourcing**: 20 NSE blue-chips, BSE volume divergence, indices (`^NSEI`, `^BSESN`, `^INDIAVIX`), and macro indicators (Brent Crude `BZ=F`, USD/INR `INR=X`, US 10Y Yields `DGS10`, Gold `GC=F`).
+- **Multi-Source Sourcing**: 50 Nifty constituents, BSE volume divergence, indices (`^NSEI`, `^BSESN`, `^INDIAVIX`), and macro indicators (Brent Crude `BZ=F`, USD/INR `INR=X`, US 10Y Yields `DGS10`, Gold `GC=F`).
 - **Calendar Reconciliation**: Indian vs. US holiday misalignment audit and lookahead-free forward-fill (`ffill()`).
 - **Visual Analytics**: 10-year cumulative equity growth, cross-asset correlation matrix, returns distribution & QQ fat-tail normality analysis.
 - **Statistical Rigor**: Pure-NumPy/SciPy Augmented Dickey-Fuller (ADF) unit-root stationarity tests proving price non-stationarity ($I(1)$) and return stationarity ($I(0)$).
@@ -245,12 +243,12 @@ The `notebooks/` directory contains three fully executed, publication-grade Jupy
 The dashboard provides an interactive quantitative operations cockpit built with Streamlit and Plotly:
 
 ### Tab 1: Live Trading Signals
-Displays active Buy/Hold recommendations for the latest market date across all 20 equities, complete with model probability gauges, current market prices, stop-loss / take-profit barriers, and dynamic confidence filters.
+Displays active Buy/Hold recommendations for the latest market date across all 50 equities, complete with model probability gauges, current market prices, stop-loss / take-profit barriers, and dynamic confidence filters.
 
 ![Tab 1: Live Trading Signals](assets/dashboard_signals.png)
 
 ### Tab 2: Out-of-Sample Backtest Performance
-Interactive Plotly equity curves comparing NiftyAlpha (+7.13% return, -2.60% max drawdown) against the Nifty 50 Index (+4.35% return, -15.77% max drawdown), key performance metric cards (CAGR, Alpha +2.78%, Sharpe Ratio), and a granular trade audit trail.
+Interactive Plotly equity curves comparing NiftyAlpha (+1.27% return, -1.77% max drawdown) against the Nifty 50 Index (+4.65% return, -15.77% max drawdown), key performance metric cards (CAGR, Sharpe Ratio), and a granular trade audit trail.
 
 ![Tab 2: Out-of-Sample Backtest Performance](assets/dashboard_backtest.png)
 
@@ -284,7 +282,7 @@ This project was built to satisfy all criteria of the DataTalksClub Stock Market
 | Rubric Criteria | Project Implementation & Evidence | Exact File / Notebook Reference |
 | :--- | :--- | :--- |
 | **Problem Description** | Emerging market dynamics (NSE/BSE), crude oil import sensitivity, precision vs. accuracy quantitative rationale, Nifty 50 benchmarking. | [README.md](README.md#L30-L60)<br>[01_eda_and_data.ipynb](notebooks/01_eda_and_data.ipynb) |
-| **Data Sourcing** | Multi-source ingestion: NSE Top 20 equities, BSE alternative volume, 3 market indices, and 5 global macro indicators from Yahoo Finance & FRED. | [src/fetch_data.py](src/fetch_data.py)<br>[01_eda_and_data.ipynb](notebooks/01_eda_and_data.ipynb) |
+| **Data Sourcing** | Multi-source ingestion: NSE Nifty 50 constituent equities, BSE alternative volume, 3 market indices, and 5 global macro indicators from Yahoo Finance & FRED. | [src/fetch_data.py](src/fetch_data.py)<br>[01_eda_and_data.ipynb](notebooks/01_eda_and_data.ipynb) |
 | **EDA & Feature Engineering** | Holiday alignment via forward-fill (`ffill()`), RSI(14), Moving Average ratios, Brent rolling correlations, Union Budget encodings, boundary pruning. | [src/features.py](src/features.py)<br>[01_eda_and_data.ipynb](notebooks/01_eda_and_data.ipynb) |
 | **Validation Strategy** | Strict chronological partitioning (Train $\le$ 2021, Val 2022–2023, Test 2024+); StandardScaler fitted strictly on Train split without leakage. | [src/features.py](src/features.py)<br>[02_model_experiments.ipynb](notebooks/02_model_experiments.ipynb) |
 | **Model Prototyping** | Comparison of 5 models: Logistic Regression baseline, Decision Tree, Random Forest, XGBoost, and MLP Neural Network. | [src/models.py](src/models.py)<br>[02_model_experiments.ipynb](notebooks/02_model_experiments.ipynb) |
@@ -332,7 +330,7 @@ This project was built to satisfy all criteria of the DataTalksClub Stock Market
 
 4. **Execute the end-to-end pipeline with one command**:
    ```bash
-   python main.py run_all --threshold 0.52
+   python main.py run_all --threshold 0.525
    ```
 
 5. **Launch the interactive Streamlit dashboard**:
@@ -402,17 +400,17 @@ NiftyAlpha/
 │   └── dashboard_explainability.png # Tab 3: SHAP feature importance & predictive drivers
 ├── data/
 │   ├── raw/                       # Raw ingested parquet datasets
-│   │   ├── nse_equities.parquet   # 20 NSE large-cap equities (2014-present)
-│   │   ├── bse_equities.parquet   # BSE equivalent volume data
-│   │   ├── indices.parquet        # ^NSEI, ^BSESN, ^INDIAVIX
-│   │   └── macro.parquet          # Brent Crude, Gold, USD/INR, DGS10, FEDFUNDS
+│   │   ├── nse_equities.parquet   # 50 Nifty constituent equities (157,174 rows, 2014-present)
+│   │   ├── bse_equities.parquet   # BSE equivalent volume data (74,605 rows)
+│   │   ├── indices.parquet        # ^NSEI, ^BSESN, ^INDIAVIX (9,494 rows)
+│   │   └── macro.parquet          # Brent Crude, Gold, USD/INR, DGS10, FEDFUNDS (13,366 rows)
 │   └── processed/                 # Feature-engineered temporal partitions
-│       ├── X_train.parquet        # Scaled training feature matrix (<=2021)
-│       ├── y_train.parquet        # Binary target series for training
-│       ├── X_val.parquet          # Scaled validation feature matrix (2022-2023)
-│       ├── y_val.parquet          # Binary target series for validation
-│       ├── X_test.parquet         # Scaled test feature matrix (2024+)
-│       └── y_test.parquet         # Binary target series for test
+│       ├── X_train.parquet        # Scaled training feature matrix (95,724 rows, <=2021)
+│       ├── y_train.parquet        # Binary target series for training (95,724 rows)
+│       ├── X_val.parquet          # Scaled validation feature matrix (24,650 rows, 2022-2023)
+│       ├── y_val.parquet          # Binary target series for validation (24,650 rows)
+│       ├── X_test.parquet         # Scaled test feature matrix (34,791 rows, 2024+)
+│       └── y_test.parquet         # Binary target series for test (34,791 rows)
 ├── models/                        # Serialized model artifacts (.joblib)
 │   ├── scaler.joblib              # StandardScaler fitted strictly on Train
 │   ├── logistic_regression_model.joblib

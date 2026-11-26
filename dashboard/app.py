@@ -180,7 +180,7 @@ def main() -> None:
 
     # Header & Banner
     st.title("📈 NiftyAlpha: Indian Equity Machine Learning System")
-    st.caption("Quantitative Capstone Project | Precision-Targeted Regime Model for NSE Top 20")
+    st.caption("Quantitative Capstone Project | Precision-Targeted Regime Model for Nifty 50 Constituents")
 
     # --------------------------------------------------------------------------
     # Sidebar Controls
@@ -194,8 +194,8 @@ def main() -> None:
         "Buy Signal Threshold (Probability)",
         min_value=0.50,
         max_value=0.80,
-        value=0.60,
-        step=0.01,
+        value=0.525,
+        step=0.005,
         help="Minimum predicted probability required to generate an actionable Buy signal.",
     )
 

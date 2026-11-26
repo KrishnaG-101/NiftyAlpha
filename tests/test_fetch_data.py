@@ -24,8 +24,8 @@ from src.fetch_data import (
 
 def test_universe_sizes_and_mappings():
     """Verify universe definitions match specification."""
-    assert len(NSE_EQUITY_TICKERS) == 20
-    assert len(BSE_EQUITY_TICKERS) == 20
+    assert len(NSE_EQUITY_TICKERS) == 50
+    assert len(BSE_EQUITY_TICKERS) == 50
     assert len(INDEX_TICKERS) == 3
     assert len(COMMODITY_FX_TICKERS) == 3
     assert len(FRED_SERIES_IDS) == 2

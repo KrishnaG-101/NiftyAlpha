@@ -51,14 +51,14 @@ STOP_LOSS_PCT = 0.08           # -8% Stop Loss
 TAKE_PROFIT_PCT = 0.15         # +15% Take Profit
 MAX_HOLDING_DAYS = 20          # 20 trading days exit
 RISK_FREE_RATE = 0.07          # 7% Indian Sovereign Risk-Free Rate
-DEFAULT_PROB_THRESHOLD = 0.60
+DEFAULT_PROB_THRESHOLD = 0.525
 
 
 # ==============================================================================
 # Model & Data Loaders
 # ==============================================================================
 
-def load_best_model(models_dir: Path, preferred_name: Optional[str] = None) -> Tuple[Any, str]:
+def load_best_model(models_dir: Path, preferred_name: Optional[str] = "xgboost") -> Tuple[Any, str]:
     """
     Selects and loads the best trained model artifact from the models directory.
     Checks reports/metrics.json, prioritizing calibrated ensemble architectures
@@ -529,7 +529,7 @@ class BacktestPipeline:
         models_dir: Path = DEFAULT_MODELS_DIR,
         reports_dir: Path = DEFAULT_REPORTS_DIR,
         threshold: float = DEFAULT_PROB_THRESHOLD,
-        model_name: Optional[str] = None,
+        model_name: Optional[str] = "xgboost",
         initial_capital: float = DEFAULT_CAPITAL,
     ):
         self.raw_dir = Path(raw_dir)
@@ -537,7 +537,7 @@ class BacktestPipeline:
         self.models_dir = Path(models_dir)
         self.reports_dir = Path(reports_dir)
         self.threshold = threshold
-        self.model_name = model_name
+        self.model_name = model_name or "xgboost"
         self.initial_capital = initial_capital
 
     def run(self) -> Dict[str, Any]:
@@ -641,7 +641,7 @@ def main() -> None:
     parser.add_argument(
         "--model-name",
         type=str,
-        default=None,
+        default="xgboost",
         help="Optional specific model to test (e.g., xgboost, random_forest).",
     )
     parser.add_argument(
