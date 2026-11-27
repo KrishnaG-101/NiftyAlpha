@@ -1,6 +1,6 @@
 """
-NiftyAlpha - Feature Engineering & Preprocessing Module (Phase 3)
-==================================================================
+NiftyAlpha - Feature Engineering & Preprocessing Module
+=======================================================
 Production-grade quantitative feature engineering and temporal preprocessing.
 Engineered to prevent lookahead bias and future data leakage through strict
 time-series boundaries and partition isolation.
@@ -611,7 +611,7 @@ class FeatureEngineeringPipeline:
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="NiftyAlpha Feature Engineering & Preprocessing Module (Phase 3)",
+        description="NiftyAlpha Feature Engineering & Preprocessing Module",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
     parser.add_argument(

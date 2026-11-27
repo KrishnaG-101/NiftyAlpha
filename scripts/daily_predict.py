@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-NiftyAlpha - Automated Daily Cron Predictor & Order Generator (Phase 6)
-======================================================================
+NiftyAlpha - Automated Daily Predictor & Order Generator
+========================================================
 Automated end-of-day inference and order generation pipeline designed to be
 scheduled via Linux cron (crontab -e) or Windows Task Scheduler.
 
@@ -299,7 +299,7 @@ class DailyPredictor:
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="NiftyAlpha Automated Daily Cron Predictor (Phase 6)",
+        description="NiftyAlpha Automated Daily Predictor",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
     parser.add_argument(

@@ -222,7 +222,7 @@ def test_backtest_pipeline_end_to_end(tmp_path: Path):
     assert "Vector_Comparison" in summary
     assert "Active_Long_Short" in summary
 
-    # Check Vector Sim Predictions Columns (Rubric 5.2: sim1_, sim2_, sim3_)
+    # Check Vector Sim Predictions Columns (sim1_, sim2_, sim3_)
     vec_df = pd.read_parquet(vec_preds_path)
     required_sim_cols = [
         "sim1_nominal_return", "sim1_exit_reason",

@@ -1,6 +1,6 @@
 """
-NiftyAlpha - Multi-Source Data Ingestion Module (Phase 2)
-=========================================================
+NiftyAlpha - Multi-Source Data Ingestion Module
+===============================================
 Production-grade data ingestion pipeline for the Indian Equity Market and
 macroeconomic drivers.
 
@@ -434,7 +434,7 @@ class DataIngestionPipeline:
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="NiftyAlpha Multi-Source Data Ingestion Module (Phase 2)",
+        description="NiftyAlpha Multi-Source Data Ingestion Module",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
     parser.add_argument(

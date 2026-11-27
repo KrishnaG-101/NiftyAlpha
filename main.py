@@ -33,8 +33,8 @@ REPORTS_DIR = PROJECT_ROOT / "reports"
 
 
 def run_fetch(force: bool = False) -> None:
-    """Executes Phase 2: Data Ingestion."""
-    logger.info(">>> [Phase 2/5] Initiating Multi-Source Data Ingestion...")
+    """Executes Data Ingestion pipeline."""
+    logger.info(">>> [Data Ingestion] Initiating Multi-Source Ingestion...")
     from src.fetch_data import DataIngestionPipeline
 
     pipeline = DataIngestionPipeline(
@@ -42,12 +42,12 @@ def run_fetch(force: bool = False) -> None:
         start_date="2014-01-01",
     )
     pipeline.run_all(force=force)
-    logger.info(">>> [Phase 2/5] Data Ingestion Completed.")
+    logger.info(">>> [Data Ingestion] Completed.")
 
 
 def run_features() -> None:
-    """Executes Phase 3: Feature Engineering & Preprocessing."""
-    logger.info(">>> [Phase 3/5] Initiating Feature Engineering & Preprocessing...")
+    """Executes Feature Engineering & Preprocessing."""
+    logger.info(">>> [Feature Engineering] Initiating Feature Engineering & Preprocessing...")
     from src.features import FeatureEngineeringPipeline
 
     pipeline = FeatureEngineeringPipeline(
@@ -56,7 +56,7 @@ def run_features() -> None:
         models_dir=MODELS_DIR,
     )
     pipeline.run()
-    logger.info(">>> [Phase 3/5] Feature Engineering Completed.")
+    logger.info(">>> [Feature Engineering] Completed.")
 
 
 def run_train(
@@ -65,8 +65,8 @@ def run_train(
     n_splits: int = 5,
     n_iter: int = 8,
 ) -> None:
-    """Executes Phase 4: Machine Learning & Modeling."""
-    logger.info(">>> [Phase 4/5] Initiating ML Modeling & Precision Thresholding (Tune=%s)...", tune)
+    """Executes Machine Learning & Modeling."""
+    logger.info(">>> [Model Training] Initiating ML Modeling & Precision Thresholding (Tune=%s)...", tune)
     from src.models import ModelTrainingPipeline
 
     pipeline = ModelTrainingPipeline(
@@ -79,12 +79,12 @@ def run_train(
         n_iter=n_iter,
     )
     pipeline.train_and_evaluate()
-    logger.info(">>> [Phase 4/5] Model Training Completed.")
+    logger.info(">>> [Model Training] Completed.")
 
 
 def run_simulate(threshold: float = 0.525) -> None:
-    """Executes Phase 5: Realistic Trading Simulation."""
-    logger.info(">>> [Phase 5/5] Initiating Day-by-Day Trading Simulation...")
+    """Executes Realistic Trading Simulation."""
+    logger.info(">>> [Simulation] Initiating Day-by-Day Trading Simulation...")
     from src.backtest import BacktestPipeline
 
     pipeline = BacktestPipeline(
@@ -95,7 +95,7 @@ def run_simulate(threshold: float = 0.525) -> None:
         threshold=threshold,
     )
     pipeline.run()
-    logger.info(">>> [Phase 5/5] Trading Simulation Completed.")
+    logger.info(">>> [Simulation] Completed.")
 
 
 def run_predict(
@@ -103,8 +103,8 @@ def run_predict(
     threshold: float = 0.50,
     model: str = "xgboost",
 ) -> None:
-    """Executes Automated Daily Cron Predictor & Order Generator."""
-    logger.info(">>> [Phase 6] Initiating Daily Order Generation (Model=%s, Thresh=%.2f)...", model, threshold)
+    """Executes Automated Daily Predictor & Order Generator."""
+    logger.info(">>> [Daily Prediction] Initiating Daily Order Generation (Model=%s, Thresh=%.2f)...", model, threshold)
     from scripts.daily_predict import DailyPredictor
 
     predictor = DailyPredictor(
@@ -116,7 +116,7 @@ def run_predict(
         threshold=threshold,
     )
     predictor.run(target_date=date)
-    logger.info(">>> [Phase 6] Daily Order Generation Completed.")
+    logger.info(">>> [Daily Prediction] Completed.")
 
 
 def run_all(

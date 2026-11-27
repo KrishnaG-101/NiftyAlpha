@@ -1,14 +1,23 @@
 # NiftyAlpha Streamlit Launcher for Windows PowerShell
-$VenvStreamlit = Join-Path $PSScriptRoot "venv\Scripts\streamlit.exe"
+$ScriptDir = $PSScriptRoot
+$AppFile = Join-Path $ScriptDir "dashboard\app.py"
 
-if (-not (Test-Path $VenvStreamlit)) {
-    Write-Error "Virtual environment streamlit executable not found at $VenvStreamlit. Please run 'python -m venv venv' and install requirements."
-    exit 1
-}
+$VenvStreamlit = Join-Path $ScriptDir "venv\Scripts\streamlit.exe"
+$DotVenvStreamlit = Join-Path $ScriptDir ".venv\Scripts\streamlit.exe"
 
 Write-Host "==========================================================" -ForegroundColor Cyan
-Write-Host " Launching NiftyAlpha Streamlit Dashboard via venv..." -ForegroundColor Cyan
+Write-Host " Launching NiftyAlpha Streamlit Dashboard..." -ForegroundColor Cyan
 Write-Host " Dashboard URL: http://localhost:8501" -ForegroundColor Green
 Write-Host "==========================================================" -ForegroundColor Cyan
 
-& $VenvStreamlit run (Join-Path $PSScriptRoot "dashboard\app.py")
+if (Test-Path $VenvStreamlit) {
+    & $VenvStreamlit run $AppFile
+} elseif (Test-Path $DotVenvStreamlit) {
+    & $DotVenvStreamlit run $AppFile
+} else {
+    try {
+        streamlit run $AppFile
+    } catch {
+        python -m streamlit run $AppFile
+    }
+}

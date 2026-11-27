@@ -1,6 +1,6 @@
 """
-NiftyAlpha - Machine Learning & Modeling Module (Phase 4)
-=========================================================
+NiftyAlpha - Machine Learning & Modeling Module
+===============================================
 Production-grade machine learning model training, precision-targeted threshold
 evaluation, XAI (SHAP) explainer abstraction, and artifact serialization.
 
@@ -619,7 +619,7 @@ class ModelTrainingPipeline:
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="NiftyAlpha Machine Learning & Modeling Module (Phase 4)",
+        description="NiftyAlpha Machine Learning & Modeling Module",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
     parser.add_argument(

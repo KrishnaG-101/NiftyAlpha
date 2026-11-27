@@ -1,6 +1,6 @@
 """
-NiftyAlpha - Realistic Trading Simulation Module (Phase 5)
-==========================================================
+NiftyAlpha - Realistic Trading Simulation Module
+================================================
 Day-by-day iterative backtesting engine on out-of-sample data (2024-present).
 Simulates real-world market microstructure, trade friction, risk management,
 and portfolio mark-to-market accounting.
@@ -514,7 +514,7 @@ class TradingSimulator:
 
 
 # ==============================================================================
-# Vectorized Multi-Strategy Simulation Engine (Phase 5 Extension - Rubric 5.1 & 5.2)
+# Vectorized Multi-Strategy Simulation Engine
 # ==============================================================================
 
 class VectorSimulator:
@@ -743,12 +743,12 @@ class VectorSimulator:
 
 
 # ==============================================================================
-# Active Long-Short Alpha Simulation Engine (Rubric 5.6 & 5.7)
+# Active Long-Short Alpha Simulation Engine
 # ==============================================================================
 
 class ActiveLongShortSimulator:
     """
-    Executes an institutional Active Long-Short Alpha Strategy (Rubric 5.6 & 5.7).
+    Executes an institutional Active Long-Short Alpha Strategy.
     Fulfills exceptional profitability vs. benchmark by combining:
     1. Long Leg (Buy Low): High model conviction (Prob >= min_long_prob) on oversold pullbacks
        (rsi_14 < 60) and high VIX regime dips (Crisis Alpha, 82% win rate). Avoids February budget month.
@@ -1215,7 +1215,7 @@ class BacktestPipeline:
             threshold=self.threshold,
         )
 
-        # 5. Active Long-Short Alpha Simulation (Rubric 5.6 & 5.7)
+        # 5. Active Long-Short Alpha Simulation
         active_sim = ActiveLongShortSimulator(
             initial_capital=self.initial_capital,
             max_positions=3,
@@ -1302,7 +1302,7 @@ class BacktestPipeline:
         print(table)
 
         if vec_comp_df is not None and not vec_comp_df.empty:
-            vec_header = f"\n{'='*70}\n VECTORIZED MULTI-STRATEGY COMPARISON SUMMARY (Rubric 5.1 & 5.2)\n{'='*70}"
+            vec_header = f"\n{'='*70}\n VECTORIZED MULTI-STRATEGY COMPARISON SUMMARY\n{'='*70}"
             print(vec_header)
             print(vec_comp_df.to_string(index=False))
             print("="*70 + "\n")
@@ -1311,7 +1311,7 @@ class BacktestPipeline:
             act_strat = active_summary["Strategy"]
             act_bench = active_summary["Benchmark"]
             act_stats = active_summary["Trade_Stats"]
-            act_header = f"{'='*70}\n EXCEPTIONAL PROFITABILITY: ACTIVE LONG-SHORT ALPHA (Rubric 5.6 & 5.7)\n{'='*70}"
+            act_header = f"{'='*70}\n EXCEPTIONAL PROFITABILITY: ACTIVE LONG-SHORT ALPHA\n{'='*70}"
             act_table = f"""
 {act_header}
   Metric                       Active Long-Short         Benchmark (Nifty 50)
@@ -1335,7 +1335,7 @@ class BacktestPipeline:
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="NiftyAlpha Realistic Trading Simulation Engine (Phase 5)",
+        description="NiftyAlpha Realistic Trading Simulation Engine",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
     parser.add_argument(

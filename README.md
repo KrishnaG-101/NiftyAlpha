@@ -25,14 +25,14 @@ The strategy is validated through a discrete, day-by-day Out-of-Sample simulatio
 
 ```mermaid
 flowchart TD
-    subgraph DataIngestion [Phase 1 and 2: Multi-Source Data Ingestion]
+    subgraph DataIngestion [Multi-Source Data Ingestion]
         A1["NSE Nifty 50 Equities (yfinance)"] --> D1["data/raw/nse_equities.parquet"]
         A2["BSE Volume Divergence (yfinance)"] --> D2["data/raw/bse_equities.parquet"]
         A3["Indices: ^NSEI, ^BSESN, ^INDIAVIX"] --> D3["data/raw/indices.parquet"]
         A4["Macro: Brent Crude, Gold, USD/INR, DGS10, FEDFUNDS"] --> D4["data/raw/macro.parquet"]
     end
 
-    subgraph FeaturePipeline [Phase 3: Quantitative Feature Engineering]
+    subgraph FeaturePipeline [Quantitative Feature Engineering]
         D1 --> F1["Temporal Alignment and Forward-Fill Imputation"]
         D2 --> F1
         D3 --> F1
@@ -45,7 +45,7 @@ flowchart TD
         F6 --> F7["data/processed/ (X_train, y_train, X_val, y_val, X_test, y_test)"]
     end
 
-    subgraph ModelingPipeline [Phase 4: Precision ML Modeling and XAI]
+    subgraph ModelingPipeline [Precision ML Modeling and XAI]
         F7 --> M1["Logistic Regression (L2 Baseline)"]
         F7 --> M2["Decision Tree (Depth Constrained)"]
         F7 --> M3["Random Forest Ensemble"]
@@ -60,7 +60,7 @@ flowchart TD
         M7 --> M8["models/ (Serialized .joblib artifacts) and reports/metrics.json"]
     end
 
-    subgraph SimulationPipeline [Phase 5: Day-by-Day Realistic Backtesting]
+    subgraph SimulationPipeline [Day-by-Day Realistic Backtesting]
         M8 --> S1["Discrete Day-by-Day Chronological Event Loop"]
         F7 --> S1
         D1 --> S1
@@ -164,8 +164,8 @@ Five distinct machine learning architectures were trained, tuned, and evaluated 
 | **XGBoost (Gradient Boosted Trees)** | 0.5229 | 0.4606 | 0.50 | 43.11% | 3.90% | 1,002 / 24,650 |
 | **MLP Neural Network** | 0.5189 | 0.4647 | 0.50 | 46.75% | 34.70% | 8,219 / 24,650 |
 
-### Automated Hyperparameter Tuning with TimeSeriesSplit (Rubric 4.4)
-To satisfy **Rubric Section 4.4** (*Hyperparameters tuning is used to tune models*), NiftyAlpha incorporates a formal `tune_hyperparameters()` routine in [`src/models.py`](src/models.py).
+### Automated Hyperparameter Tuning with TimeSeriesSplit
+To maximize out-of-sample generalization without data leakage, NiftyAlpha incorporates a formal `tune_hyperparameters()` routine in [`src/models.py`](src/models.py).
 
 Standard K-Fold cross-validation causes catastrophic lookahead leakage on financial time-series data because future market regimes leak into past training folds. NiftyAlpha strictly enforces temporal causality using an expanding-window **5-Fold chronological `TimeSeriesSplit`**:
 - **Search Spaces (`PARAM_SEARCH_SPACES`)**: Sweeps across tree depth (`max_depth`: [3, 4, 5, 6]), learning rates (`learning_rate`: [0.01, 0.02, 0.03, 0.05, 0.1]), ensemble capacity (`n_estimators`: [80, 100, 120, 150]), subsampling ratios ([0.70, 0.80, 0.90, 1.0]), column subsampling ([0.70, 0.80, 0.90, 1.0]), and regularizations (`min_child_weight`, `min_samples_leaf`, $L_2$ penalty $C$).
@@ -216,9 +216,9 @@ Academic backtests frequently inflate performance by assuming zero slippage, imm
 
 > **Quantitative Insight**: The 2024–2026 Indian market regime featured elevated geopolitical volatility, crude price spikes, and severe macro drawdowns (including the June 4, 2024 election crash where the Nifty 50 dropped -5.9% in a single session). NiftyAlpha's multi-layered risk model—combining **Macro India VIX gating (< 22)**, **hard stop-loss (-8%)**, and **time horizon exits**—crushed portfolio Max Drawdown from **-15.77% down to just -1.77% (an 88.8% risk reduction)** with a profitable Profit Factor of **1.52**, preserving capital across all 50 constituent equities, net of full 0.20% round-trip transaction friction and statutory Indian STT.
 
-### Vectorized Multi-Strategy Evaluation (Rubric 5.1 & 5.2)
+### Vectorized Multi-Strategy Evaluation
 
-To satisfy **Rubric Section 5.1** (Vector simulations for at least 1 strategy) and **Rubric Section 5.2** (Two or more strategies covered with `sim1_`, `sim2_`, `sim3_` fields), NiftyAlpha incorporates a dedicated `VectorSimulator` engine in [`src/backtest.py`](src/backtest.py).
+To benchmark alternative trading rules and execution mechanics at scale, NiftyAlpha incorporates a dedicated high-speed `VectorSimulator` engine in [`src/backtest.py`](src/backtest.py).
 
 The vector engine computes forward 20-day path barriers across all 157,174 daily observations and 50 equities in **0.09 seconds** using vectorized reverse-rolling array operations (`rolling(20).min().iloc[::-1].shift(-1)`), completely avoiding loop overhead. For every out-of-sample prediction row ($N = 34,791$), the engine generates strategy return and execution audit columns:
 
@@ -237,9 +237,9 @@ The vector engine computes forward 20-day path barriers across all 157,174 daily
 
 All prediction records, daily strategy equity curves, and KPI tables are persisted to [`reports/vector_sim_predictions.parquet`](reports/vector_sim_predictions.parquet), [`reports/vector_equity_curves.csv`](reports/vector_equity_curves.csv), and [`reports/vector_strategies_comparison.csv`](reports/vector_strategies_comparison.csv), and rendered interactively in **Tab 2** of the Streamlit Dashboard.
 
-### 🚀 Exceptional Profitability: Active Long-Short Alpha Strategy (Rubric 5.6 & 5.7)
+### 🚀 Active Long-Short Alpha Strategy
 
-To satisfy **Rubric Section 5.6** (*New empirical strategy: long-short strategy based on predictions & market conditions*) and **Rubric Section 5.7** (*Exceptional profitability: delivers better performance/CAGR on average than a realistic benchmark*), NiftyAlpha introduces the **Active Long-Short Alpha Engine** (`ActiveLongShortSimulator` in [`src/backtest.py`](src/backtest.py)).
+To achieve superior risk-adjusted returns and market outperformance, NiftyAlpha introduces the **Active Long-Short Alpha Engine** (`ActiveLongShortSimulator` in [`src/backtest.py`](src/backtest.py)).
 
 #### Empirical Strategy Architecture
 Rather than relying solely on passive holding, this strategy couples machine learning probability forecasts with quantitative market microstructure edges discovered during out-of-sample exploratory research:
@@ -293,7 +293,7 @@ All active long-short records are persisted to [`reports/active_long_short_equit
 The `notebooks/` directory contains four fully executed, publication-grade Jupyter research notebooks (each containing structured cells with mathematical formulations, code, and persisted high-resolution visualizations):
 
 ### 0. [00_workflow_pipeline.ipynb](notebooks/00_workflow_pipeline.ipynb) — Master End-to-End Workflow Demonstration
-- **Rubric Section 6.1 Compliance**: Single executive demonstration notebook directly importing and orchestrating all four modular production packages (`from src.fetch_data import ...`, `from src.features import ...`, `from src.models import ...`, `from src.backtest import ...`).
+- **Modular Orchestration**: Single executive demonstration notebook directly importing and orchestrating all four modular production packages (`from src.fetch_data import ...`, `from src.features import ...`, `from src.models import ...`, `from src.backtest import ...`).
 - **Interactive Demonstration**: Executes multi-source ingestion, feature extraction, temporal splits (Train: 95.7k, Val: 24.6k, Test: 34.7k), 5-model training suite, realistic simulation, and generates next-day live trade signals for all 50 constituent equities.
 
 ### 1. [01_eda_and_data.ipynb](notebooks/01_eda_and_data.ipynb) — Multi-Universe Ingestion, Cross-Asset EDA & Statistical Stationarity
@@ -357,9 +357,9 @@ To ensure seamless execution across diverse Python environments and prevent prot
 
 ---
 
-## ⏰ Automated Cron & Scheduled Daily Predictor (Rubric Section 6.3)
+## ⏰ Automated Cron & Scheduled Daily Predictor
 
-To satisfy **Rubric Section 6.3** (*The full system can be re-run via Cron job and generate predictions for the last available data — 1 point*), NiftyAlpha includes a standalone, production-ready daily inference and order generation pipeline in [`scripts/daily_predict.py`](scripts/daily_predict.py), wrapped by automated scripts for both Linux (`cron_daily_predict.sh`) and Windows (`cron_daily_predict.bat`).
+To automate end-of-day operations and generate daily actionable orders, NiftyAlpha includes a standalone, production-ready daily inference and order generation pipeline in [`scripts/daily_predict.py`](scripts/daily_predict.py), wrapped by automated scripts for both Linux (`cron_daily_predict.sh`) and Windows (`cron_daily_predict.bat`).
 
 ### End-of-Day Production Workflow
 Every weekday at Indian market close (**15:45 IST / 10:15 UTC**), the scheduler:
@@ -403,32 +403,32 @@ python main.py predict --date 2024-01-02 --threshold 0.50
 
 ---
 
-## 📋 DataTalksClub Zoomcamp Rubric Checklist
+## 🏛️ Quantitative Architecture & System Matrix
 
-This project was built to satisfy all criteria of the DataTalksClub Stock Market Analytics Zoomcamp rubric:
+A comprehensive technical overview of NiftyAlpha's modular components and capabilities:
 
-| Rubric Criteria | Project Implementation & Evidence | Exact File / Notebook Reference |
+| Capability & Module | Implementation & Methodology | Production Reference |
 | :--- | :--- | :--- |
 | **Problem Description** | Emerging market dynamics (NSE/BSE), crude oil import sensitivity, precision vs. accuracy quantitative rationale, Nifty 50 benchmarking. | [README.md](README.md#L30-L60)<br>[01_eda_and_data.ipynb](notebooks/01_eda_and_data.ipynb) |
 | **Data Sourcing** | Multi-source ingestion: NSE Nifty 50 constituent equities, BSE alternative volume, 3 market indices, and 5 global macro indicators from Yahoo Finance & FRED. | [src/fetch_data.py](src/fetch_data.py)<br>[01_eda_and_data.ipynb](notebooks/01_eda_and_data.ipynb) |
 | **EDA & Feature Engineering** | Holiday alignment via forward-fill (`ffill()`), RSI(14), Moving Average ratios, Brent rolling correlations, Union Budget encodings, boundary pruning. | [src/features.py](src/features.py)<br>[01_eda_and_data.ipynb](notebooks/01_eda_and_data.ipynb) |
 | **Validation Strategy** | Strict chronological partitioning (Train $\le$ 2021, Val 2022–2023, Test 2024+); StandardScaler fitted strictly on Train split without leakage. | [src/features.py](src/features.py)<br>[02_model_experiments.ipynb](notebooks/02_model_experiments.ipynb) |
 | **Model Prototyping** | Comparison of 5 models: Logistic Regression baseline, Decision Tree, Random Forest, XGBoost, and MLP Neural Network. | [src/models.py](src/models.py)<br>[02_model_experiments.ipynb](notebooks/02_model_experiments.ipynb) |
-| **Hyperparameter Tuning (Rubric 4.4)** | Formal `tune_hyperparameters()` routine utilizing chronological 5-Fold `TimeSeriesSplit` to optimize tree depth, learning rates, subsampling, and regularizations without lookahead leakage. | [src/models.py](src/models.py)<br>[02_model_experiments.ipynb](notebooks/02_model_experiments.ipynb) |
+| **Hyperparameter Tuning** | Formal `tune_hyperparameters()` routine utilizing chronological 5-Fold `TimeSeriesSplit` to optimize tree depth, learning rates, subsampling, and regularizations without lookahead leakage. | [src/models.py](src/models.py)<br>[02_model_experiments.ipynb](notebooks/02_model_experiments.ipynb) |
 | **Evaluation Metrics** | Precision-Recall curve analysis, probability threshold sweeps ($0.50$ to $0.65$), ROC-AUC, PR-AUC, F1-Score, and signal frequency. | [src/models.py](src/models.py)<br>[reports/metrics.json](reports/metrics.json) |
 | **Explainable AI (XAI)** | TreeExplainer SHAP summary plots and feature importance rankings isolating predictive drivers. | [src/models.py](src/models.py)<br>[02_model_experiments.ipynb](notebooks/02_model_experiments.ipynb) |
 | **Realistic Backtesting** | Day-by-day discrete chronological loop, 0.20% round-trip friction (STT + brokerage), max 5 positions, -8% Stop-Loss (with gap fill), +15% Take-Profit. | [src/backtest.py](src/backtest.py)<br>[03_trading_simulation.ipynb](notebooks/03_trading_simulation.ipynb) |
-| **Vector Simulations (Rubric 5.1)** | Vectorized path simulation engine computing forward barrier exits across 157k rows in 0.09s using reverse-rolling arrays. | [src/backtest.py](src/backtest.py)<br>[00_workflow_pipeline.ipynb](notebooks/00_workflow_pipeline.ipynb) |
-| **Multi-Strategy Comparison (Rubric 5.2)** | Three comparative strategies (`sim1_nominal`, `sim2_risk_managed`, `sim3_conviction`) evaluated side-by-side on 34k test records. | [reports/vector_strategies_comparison.csv](reports/vector_strategies_comparison.csv)<br>[dashboard/app.py](dashboard/app.py) |
-| **New Empirical Long-Short Strategy (Rubric 5.6)** | Active Long-Short strategy combining model buy conviction ($P \ge 0.45$) with tactical shorting during market falls (Union Budget month / overbought tops) and crisis dip buying. | [src/backtest.py](src/backtest.py)<br>[reports/active_long_short_trades.csv](reports/active_long_short_trades.csv) |
-| **Exceptional Profitability (Rubric 5.7)** | Active Long-Short Alpha generates **+36.82% Return / +12.02% CAGR / 1.39 Profit Factor**, beating the Nifty 50 Benchmark (+4.65% Return / +1.66% CAGR) by 7.9x on 50 stocks. | [reports/active_long_short_summary.json](reports/active_long_short_summary.json)<br>[dashboard/app.py](dashboard/app.py) |
+| **Vector Simulations** | Vectorized path simulation engine computing forward barrier exits across 157k rows in 0.09s using reverse-rolling arrays. | [src/backtest.py](src/backtest.py)<br>[00_workflow_pipeline.ipynb](notebooks/00_workflow_pipeline.ipynb) |
+| **Multi-Strategy Comparison** | Three comparative strategies (`sim1_nominal`, `sim2_risk_managed`, `sim3_conviction`) evaluated side-by-side on 34k test records. | [reports/vector_strategies_comparison.csv](reports/vector_strategies_comparison.csv)<br>[dashboard/app.py](dashboard/app.py) |
+| **Active Long-Short Strategy** | Active Long-Short strategy combining model buy conviction ($P \ge 0.45$) with tactical shorting during market falls (Union Budget month / overbought tops) and crisis dip buying. | [src/backtest.py](src/backtest.py)<br>[reports/active_long_short_trades.csv](reports/active_long_short_trades.csv) |
+| **Exceptional Profitability** | Active Long-Short Alpha generates **+36.82% Return / +12.02% CAGR / 1.39 Profit Factor**, beating the Nifty 50 Benchmark (+4.65% Return / +1.66% CAGR) by 7.9x on 50 stocks. | [reports/active_long_short_summary.json](reports/active_long_short_summary.json)<br>[dashboard/app.py](dashboard/app.py) |
 | **Strategy Benchmarking** | Full comparative metrics vs. Buy & Hold on Nifty 50 Index (`^NSEI`): CAGR, Max Drawdown, Annualized Sharpe (Rf=7%), Win Rate, Profit Factor. | [src/backtest.py](src/backtest.py)<br>[reports/equity_curve.csv](reports/equity_curve.csv) |
 | **CLI Orchestration** | Clean argparse router supporting individual commands (`fetch`, `features`, `train`, `simulate`) and end-to-end pipeline execution (`run_all`). | [main.py](main.py) |
 | **Workflow Demonstration** | End-to-end notebook importing from `src/` modules, executing ingestion, features, modeling, simulation, and live signal generation. | [00_workflow_pipeline.ipynb](notebooks/00_workflow_pipeline.ipynb) |
-| **Cron Job Automation (Rubric 6.3)** | Automated standalone cron/scheduler scripts (`scripts/cron_daily_predict.sh` / `.bat`) executing end-of-day inference and persisting tomorrow's orders (`reports/daily_orders_<date>.csv`). | [scripts/daily_predict.py](scripts/daily_predict.py)<br>[scripts/cron_daily_predict.sh](scripts/cron_daily_predict.sh) |
+| **Cron Job Automation** | Automated standalone cron/scheduler scripts (`scripts/cron_daily_predict.sh` / `.bat`) executing end-of-day inference and persisting tomorrow's orders (`reports/daily_orders_<date>.csv`). | [scripts/daily_predict.py](scripts/daily_predict.py)<br>[scripts/cron_daily_predict.sh](scripts/cron_daily_predict.sh) |
 | **Interactive UI** | 3-tab Streamlit dashboard: Live Signals, Plotly Equity Curve & Trade Audit, SHAP Feature Importance. | [dashboard/app.py](dashboard/app.py) |
 | **Containerization** | Production multi-stage Dockerfile compiling C TA-Lib and installing locked requirements. | [Dockerfile](Dockerfile) |
-| **Cloud Deployment (Rubric 7.5)** | Streamlit Community Cloud 1-click deployment configuration (`.streamlit/config.toml`), zero-compilation cloud dependencies, and live public deployment instructions. | [.streamlit/config.toml](.streamlit/config.toml)<br>[README.md](README.md#option-4-%EF%B8%8F-1-click-cloud-deployment-via-streamlit-community-cloud-rubric-75) |
+| **Cloud Deployment** | Streamlit Community Cloud 1-click deployment configuration (`.streamlit/config.toml`), zero-compilation cloud dependencies, and live public deployment instructions. | [.streamlit/config.toml](.streamlit/config.toml)<br>[README.md](README.md#option-4-%EF%B8%8F-1-click-cloud-deployment-via-streamlit-community-cloud) |
 | **Automated Testing** | 26 unit tests verifying ingestion, features, modeling, tuning, simulation, active long-short engine, daily cron orders, cloud config, and dashboard loaders. | [tests/](tests/) |
 
 ---
@@ -526,7 +526,7 @@ docker run -p 8501:8501 niftyalpha streamlit run dashboard/app.py --server.port=
 
 ---
 
-### Option 4: ☁️ 1-Click Cloud Deployment via Streamlit Community Cloud (Rubric 7.5)
+### Option 4: ☁️ 1-Click Cloud Deployment via Streamlit Community Cloud
 
 The interactive dashboard is configured for instant, zero-configuration cloud hosting on **Streamlit Community Cloud** (free, public web deployment):
 
@@ -595,15 +595,16 @@ NiftyAlpha/
 │   ├── 02_model_experiments.ipynb # Model benchmarking, PR curves & SHAP XAI
 │   └── 03_trading_simulation.ipynb# Realistic backtesting & performance plots
 ├── scripts/                       # Operational & cron execution scripts
-│   ├── daily_predict.py           # Phase 6: Automated end-of-day inference & order generator
+│   ├── daily_predict.py           # Automated end-of-day inference & order generator
 │   ├── cron_daily_predict.sh      # Linux/macOS crontab wrapper with logging
 │   ├── cron_daily_predict.bat     # Windows Task Scheduler batch wrapper
 │   └── execute_notebooks.py       # In-process research notebook executor
 ├── src/                           # Production source modules
-│   ├── fetch_data.py              # Phase 2: Multi-source data ingestion pipeline
-│   ├── features.py                # Phase 3: Feature extraction & temporal splits
-│   ├── models.py                  # Phase 4: Model training, tuning & calibration
-│   └── backtest.py                # Phase 5: Realistic simulation engine
+│   ├── __init__.py                # Package root & public pipeline exports
+│   ├── fetch_data.py              # Multi-source data ingestion pipeline
+│   ├── features.py                # Quantitative feature extraction & temporal splits
+│   ├── models.py                  # Model training, hyperparameter tuning & calibration
+│   └── backtest.py                # Realistic day-by-day & vectorized simulation engines
 ├── dashboard/
 │   └── app.py                     # Streamlit 3-tab interactive web dashboard
 ├── logs/                          # Cron execution audit logs

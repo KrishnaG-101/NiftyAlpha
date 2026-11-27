@@ -64,7 +64,7 @@ def load_trade_log(reports_dir: Path = REPORTS_DIR) -> Optional[pd.DataFrame]:
 
 @st.cache_data
 def load_vector_comparison(reports_dir: Path = REPORTS_DIR) -> Optional[pd.DataFrame]:
-    """Loads and caches the vectorized multi-strategy comparison table (Rubric 5.1 & 5.2)."""
+    """Loads and caches the vectorized multi-strategy comparison table."""
     path = reports_dir / "vector_strategies_comparison.csv"
     if path.exists():
         return pd.read_csv(path)
@@ -485,7 +485,7 @@ def main() -> None:
         # SUBTAB 1: Active Long-Short Alpha (HERO / DEFAULT)
         # ----------------------------------------------------------------------
         with subtab_active:
-            st.markdown("### 🚀 Active Long-Short Alpha Strategy (Rubric 5.6 & 5.7)")
+            st.markdown("### 🚀 Active Long-Short Alpha Strategy")
             st.caption(
                 "Active quantitative strategy combining predictive ML with buy-the-dip execution on oversold pullbacks "
                 "and High VIX crisis regimes, +12% overbought profit-taking, and tactical shorting during market falls / February Union Budget month."
@@ -531,7 +531,7 @@ def main() -> None:
         # SUBTAB 2: Conservative Risk-Managed Baseline
         # ----------------------------------------------------------------------
         with subtab_baseline:
-            st.markdown("### 🛡️ Conservative Capital-Preservation Baseline (Rubric 5.3 & 5.5)")
+            st.markdown("### 🛡️ Conservative Capital-Preservation Baseline")
             st.caption(
                 "Strict capital-preservation institutional model with macro India VIX gating (< 22), hard -8% stop loss, "
                 "+15% take profit, and 20-day time exit. Crushed Max Drawdown by 88.8% (-1.77% vs -15.77% benchmark)."
@@ -592,7 +592,7 @@ def main() -> None:
         # SUBTAB 3: Vectorized Multi-Strategy Comparison
         # ----------------------------------------------------------------------
         with subtab_vector:
-            st.markdown("### ⚡ Vectorized Multi-Strategy Evaluation (Rubric 5.1 & 5.2)")
+            st.markdown("### ⚡ Vectorized Multi-Strategy Evaluation")
             st.caption("Array-based vectorized simulation computing barrier exits across 34,791 test records in 0.09s.")
 
             vec_comp_df = load_vector_comparison()

@@ -2,7 +2,6 @@
 # NiftyAlpha - Streamlit Community Cloud Production Configuration
 # ==============================================================================
 # Production settings optimized for low-latency cloud hosting on share.streamlit.io.
-# Rubric Criteria: Section 7.5 (Cloud Deployment Bonus - 1 point).
 # ==============================================================================
 
 [theme]
