@@ -14,6 +14,7 @@ from sklearn.dummy import DummyClassifier
 from src.backtest import (
     calculate_performance_metrics,
     TradingSimulator,
+    VectorSimulator,
     BacktestPipeline,
     DEFAULT_CAPITAL,
     STOP_LOSS_PCT,
@@ -189,9 +190,15 @@ def test_backtest_pipeline_end_to_end(tmp_path: Path):
     # Check Artifacts
     equity_curve_path = reports_dir / "equity_curve.csv"
     trade_log_path = reports_dir / "trade_log.csv"
+    vec_preds_path = reports_dir / "vector_sim_predictions.parquet"
+    vec_equity_path = reports_dir / "vector_equity_curves.csv"
+    vec_comp_path = reports_dir / "vector_strategies_comparison.csv"
 
     assert equity_curve_path.exists()
     assert trade_log_path.exists()
+    assert vec_preds_path.exists()
+    assert vec_equity_path.exists()
+    assert vec_comp_path.exists()
 
     eq_df = pd.read_csv(equity_curve_path)
     assert len(eq_df) == len(dates)
@@ -205,3 +212,67 @@ def test_backtest_pipeline_end_to_end(tmp_path: Path):
 
     assert "Strategy" in summary
     assert "Benchmark" in summary
+    assert "Vector_Comparison" in summary
+
+    # Check Vector Sim Predictions Columns (Rubric 5.2: sim1_, sim2_, sim3_)
+    vec_df = pd.read_parquet(vec_preds_path)
+    required_sim_cols = [
+        "sim1_nominal_return", "sim1_exit_reason",
+        "sim2_risk_managed_return", "sim2_exit_reason",
+        "sim3_conviction_weight", "sim3_conviction_return",
+    ]
+    for col in required_sim_cols:
+        assert col in vec_df.columns, f"Missing required column: {col}"
+
+
+def test_vector_simulator_unit():
+    """Verify VectorSimulator executes multi-strategy returns on synthetic data."""
+    dates = pd.date_range("2024-01-01", periods=25, freq="B")
+    tickers = ["STOCK_A.NS", "STOCK_B.NS"]
+
+    X_records = []
+    raw_records = []
+    indices_records = []
+
+    for i, d in enumerate(dates):
+        indices_records.append({
+            "Date": d, "Ticker": "^NSEI",
+            "Open": 21000.0, "High": 21100.0, "Low": 20900.0, "Close": 21050.0,
+        })
+        for t in tickers:
+            base_p = 100.0 + (i * 2.0 if t == "STOCK_A.NS" else -i * 1.5)
+            raw_records.append({
+                "Date": d, "Ticker": t,
+                "Open": base_p, "High": base_p * 1.05, "Low": base_p * 0.95, "Close": base_p * 1.01,
+            })
+            if i < 5:
+                X_records.append({
+                    "Date": d, "Ticker": t, "feat_1": 1.0,
+                })
+
+    X_test = pd.DataFrame(X_records)
+    raw_prices = pd.DataFrame(raw_records)
+    indices_df = pd.DataFrame(indices_records)
+
+    class MockModel:
+        def predict_proba(self, X):
+            # Stock A high confidence (0.80), Stock B lower confidence (0.55)
+            return np.array([[0.20, 0.80] if i % 2 == 0 else [0.45, 0.55] for i in range(len(X))])
+
+    simulator = VectorSimulator(initial_capital=100_000.0, holding_days=10)
+    preds, eq_df, comp_df = simulator.run_vector_simulation(
+        X_test=X_test,
+        raw_prices=raw_prices,
+        indices_df=indices_df,
+        model=MockModel(),
+        threshold=0.50,
+    )
+
+    assert "sim1_nominal_return" in preds.columns
+    assert "sim2_risk_managed_return" in preds.columns
+    assert "sim3_conviction_return" in preds.columns
+    assert "Strategy_Sim1_Value" in eq_df.columns
+    assert "Strategy_Sim2_Value" in eq_df.columns
+    assert "Strategy_Sim3_Value" in eq_df.columns
+    assert len(comp_df) == 4
+

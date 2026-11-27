@@ -1,0 +1,5 @@
+Strategy,Final Value (₹),Total Return (%),CAGR (%),Max Drawdown (%),Sharpe Ratio,Win Rate (%),Profit Factor,Total Signals
+Sim1: Nominal (20d Unconstrained),"₹1,024,664.24",+2.47%,0.89%,-2.50%,-6.09,52.6%,1.46,289
+Sim2: Risk-Managed (Stop-Loss / Take-Profit),"₹974,807.82",-2.52%,-0.92%,-5.11%,-7.71,43.6%,0.84,289
+Sim3: Conviction-Weighted,"₹974,877.05",-2.51%,-0.92%,-5.39%,-7.19,43.6%,0.86,289
+Benchmark: Nifty 50 Index (^NSEI),"₹1,046,513.82",+4.65%,1.66%,-15.77%,-0.31,N/A,N/A,1

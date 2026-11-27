@@ -514,6 +514,235 @@ class TradingSimulator:
 
 
 # ==============================================================================
+# Vectorized Multi-Strategy Simulation Engine (Phase 5 Extension - Rubric 5.1 & 5.2)
+# ==============================================================================
+
+class VectorSimulator:
+    """
+    Executes vectorized matrix backtesting across out-of-sample predictions,
+    comparing multiple distinct trading strategies side-by-side:
+    1. sim1_nominal: Baseline unconstrained buy-and-hold for the full 20-trading-day horizon.
+    2. sim2_risk_managed: Institutional strategy with -8% stop loss and +15% take profit.
+    3. sim3_conviction_weighted: Dynamic position allocation scaled by model confidence.
+
+    Generates prediction-level columns (sim1_, sim2_, sim3_) and comparative portfolio equity curves.
+    """
+
+    def __init__(
+        self,
+        initial_capital: float = DEFAULT_CAPITAL,
+        friction: float = TRANSACTION_FRICTION,
+        stop_loss_pct: float = STOP_LOSS_PCT,
+        take_profit_pct: float = TAKE_PROFIT_PCT,
+        holding_days: int = MAX_HOLDING_DAYS,
+        max_positions: int = DEFAULT_MAX_POSITIONS,
+    ):
+        self.initial_capital = initial_capital
+        self.friction = friction
+        self.stop_loss_pct = stop_loss_pct
+        self.take_profit_pct = take_profit_pct
+        self.holding_days = holding_days
+        self.max_positions = max_positions
+
+    def run_vector_simulation(
+        self,
+        X_test: pd.DataFrame,
+        raw_prices: pd.DataFrame,
+        indices_df: pd.DataFrame,
+        model: Any,
+        threshold: float = DEFAULT_PROB_THRESHOLD,
+    ) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
+        """
+        Runs vectorized simulation and returns:
+        1. predictions_df: With sim1_, sim2_, sim3_ return and exit columns.
+        2. equity_df: Daily comparative equity curves for all strategies vs benchmark.
+        3. comparison_df: Side-by-side KPI table comparing all strategies.
+        """
+        logger.info("Initiating vectorized multi-strategy simulation engine...")
+
+        # 1. Predictions
+        meta_cols = ["Date", "Ticker"]
+        feature_cols = [c for c in X_test.columns if c not in meta_cols]
+        X_feats = X_test[feature_cols]
+
+        if hasattr(model, "predict_proba"):
+            raw_probs = model.predict_proba(X_feats)
+            if hasattr(raw_probs, "ndim") and raw_probs.ndim == 2 and raw_probs.shape[1] > 1:
+                probs = raw_probs[:, 1]
+            else:
+                probs = np.ravel(raw_probs)
+        else:
+            probs = model.predict(X_feats)
+
+        preds = X_test[["Date", "Ticker"]].copy()
+        preds["Date"] = pd.to_datetime(preds["Date"]).dt.normalize()
+        preds["y_prob"] = probs
+        preds["signal"] = (probs >= threshold).astype(int)
+
+        # 2. Precompute Forward Variables from raw_prices
+        raw = raw_prices.copy()
+        raw["Date"] = pd.to_datetime(raw["Date"]).dt.normalize()
+        raw = raw.sort_values(["Ticker", "Date"]).reset_index(drop=True)
+
+        raw["fwd_open"] = raw.groupby("Ticker")["Open"].shift(-1)
+        raw["fwd_close_20d"] = raw.groupby("Ticker")["Close"].shift(-self.holding_days)
+        raw["fwd_min_20d"] = raw.groupby("Ticker")["Low"].transform(
+            lambda s: s.iloc[::-1].rolling(self.holding_days, min_periods=1).min().iloc[::-1].shift(-1)
+        )
+        raw["fwd_max_20d"] = raw.groupby("Ticker")["High"].transform(
+            lambda s: s.iloc[::-1].rolling(self.holding_days, min_periods=1).max().iloc[::-1].shift(-1)
+        )
+
+        merged = pd.merge(
+            preds,
+            raw[["Date", "Ticker", "Close", "fwd_open", "fwd_close_20d", "fwd_min_20d", "fwd_max_20d"]],
+            on=["Date", "Ticker"],
+            how="left",
+        )
+
+        # 3. Vectorized Trade Return Calculations
+        rt_friction = 2.0 * self.friction
+        is_active = (
+            (merged["signal"] == 1)
+            & merged["fwd_open"].notna()
+            & merged["fwd_close_20d"].notna()
+        )
+
+        nominal_ret = (merged["fwd_close_20d"] - merged["fwd_open"]) / merged["fwd_open"] - rt_friction
+
+        min_ret = (merged["fwd_min_20d"] - merged["fwd_open"]) / merged["fwd_open"]
+        max_ret = (merged["fwd_max_20d"] - merged["fwd_open"]) / merged["fwd_open"]
+
+        stopped_out = min_ret <= -self.stop_loss_pct
+        target_hit = max_ret >= self.take_profit_pct
+
+        sim2_ret = np.where(
+            stopped_out,
+            -self.stop_loss_pct - rt_friction,
+            np.where(target_hit, self.take_profit_pct - rt_friction, nominal_ret),
+        )
+
+        conv_denom = max(1.0 - threshold, 1e-6)
+        conv_weight = np.clip(1.0 + (merged["y_prob"] - threshold) / conv_denom, 0.5, 2.0)
+        sim3_ret = conv_weight * sim2_ret
+
+        merged["sim1_nominal_return"] = np.where(is_active, nominal_ret, 0.0)
+        merged["sim1_exit_reason"] = np.where(is_active, "Time Limit", "No Signal")
+
+        merged["sim2_risk_managed_return"] = np.where(is_active, sim2_ret, 0.0)
+        merged["sim2_exit_reason"] = np.where(
+            ~is_active,
+            "No Signal",
+            np.where(stopped_out, "Stop Loss", np.where(target_hit, "Take Profit", "Time Limit")),
+        )
+
+        merged["sim3_conviction_weight"] = np.where(is_active, conv_weight, 0.0)
+        merged["sim3_conviction_return"] = np.where(is_active, sim3_ret, 0.0)
+
+        # 4. Generate Daily Comparative Equity Curves
+        benchmark_raw = indices_df[indices_df["Ticker"] == "^NSEI"].copy().sort_values("Date")
+        benchmark_raw["Date"] = pd.to_datetime(benchmark_raw["Date"]).dt.normalize()
+
+        test_dates = sorted(merged["Date"].unique())
+        equity_records = []
+
+        bench_start = (
+            benchmark_raw[benchmark_raw["Date"] >= test_dates[0]]["Close"].iloc[0]
+            if not benchmark_raw.empty
+            else 1.0
+        )
+
+        sim1_val = self.initial_capital
+        sim2_val = self.initial_capital
+        sim3_val = self.initial_capital
+
+        alloc_per_trade = 1.0 / float(self.max_positions)
+
+        for d in test_dates:
+            day_trades = merged[(merged["Date"] == d) & (merged["signal"] == 1)]
+            n_trades = len(day_trades)
+
+            if n_trades > 0:
+                day_sim1_ret = day_trades["sim1_nominal_return"].mean() * min(n_trades, self.max_positions) * alloc_per_trade / self.holding_days
+                day_sim2_ret = day_trades["sim2_risk_managed_return"].mean() * min(n_trades, self.max_positions) * alloc_per_trade / self.holding_days
+                day_sim3_ret = day_trades["sim3_conviction_return"].mean() * min(n_trades, self.max_positions) * alloc_per_trade / self.holding_days
+            else:
+                day_sim1_ret = 0.0
+                day_sim2_ret = 0.0
+                day_sim3_ret = 0.0
+
+            sim1_val *= (1.0 + day_sim1_ret)
+            sim2_val *= (1.0 + day_sim2_ret)
+            sim3_val *= (1.0 + day_sim3_ret)
+
+            bench_match = benchmark_raw[benchmark_raw["Date"] == d]
+            if not bench_match.empty:
+                bench_close = bench_match["Close"].iloc[0]
+                bench_val = self.initial_capital * (bench_close / bench_start)
+            else:
+                bench_val = equity_records[-1]["Benchmark_Value"] if equity_records else self.initial_capital
+
+            equity_records.append({
+                "Date": d,
+                "Strategy_Sim1_Value": sim1_val,
+                "Strategy_Sim2_Value": sim2_val,
+                "Strategy_Sim3_Value": sim3_val,
+                "Benchmark_Value": bench_val,
+            })
+
+        equity_df = pd.DataFrame(equity_records)
+
+        # 5. Compute Comparative KPI Table
+        strategies = {
+            "Sim1: Nominal (20d Unconstrained)": equity_df["Strategy_Sim1_Value"],
+            "Sim2: Risk-Managed (Stop-Loss / Take-Profit)": equity_df["Strategy_Sim2_Value"],
+            "Sim3: Conviction-Weighted": equity_df["Strategy_Sim3_Value"],
+            "Benchmark: Nifty 50 Index (^NSEI)": equity_df["Benchmark_Value"],
+        }
+
+        comp_rows = []
+        for s_name, s_series in strategies.items():
+            metrics = calculate_performance_metrics(s_series)
+
+            if "Sim1" in s_name:
+                sig_rets = merged.loc[is_active, "sim1_nominal_return"]
+            elif "Sim2" in s_name:
+                sig_rets = merged.loc[is_active, "sim2_risk_managed_return"]
+            elif "Sim3" in s_name:
+                sig_rets = merged.loc[is_active, "sim3_conviction_return"]
+            else:
+                sig_rets = pd.Series(dtype=float)
+
+            if len(sig_rets) > 0:
+                win_rate = (sig_rets > 0).mean() * 100.0
+                wins = sig_rets[sig_rets > 0].sum()
+                losses = abs(sig_rets[sig_rets < 0].sum())
+                profit_factor = (wins / losses) if losses > 0 else (np.inf if wins > 0 else 0.0)
+                total_sigs = len(sig_rets)
+            else:
+                win_rate = np.nan
+                profit_factor = np.nan
+                total_sigs = 1
+
+            comp_rows.append({
+                "Strategy": s_name,
+                "Final Value (₹)": f"₹{s_series.iloc[-1]:,.2f}",
+                "Total Return (%)": f"{metrics['Total Return (%)']:+.2f}%",
+                "CAGR (%)": f"{metrics['CAGR (%)']:.2f}%",
+                "Max Drawdown (%)": f"{metrics['Max Drawdown (%)']:.2f}%",
+                "Sharpe Ratio": f"{metrics['Annualized Sharpe']:.2f}",
+                "Win Rate (%)": f"{win_rate:.1f}%" if pd.notna(win_rate) else "N/A",
+                "Profit Factor": f"{profit_factor:.2f}" if pd.notna(profit_factor) else "N/A",
+                "Total Signals": total_sigs,
+            })
+
+        comparison_df = pd.DataFrame(comp_rows)
+
+        logger.info("Vectorized simulation complete across %d prediction records.", len(merged))
+        return merged, equity_df, comparison_df
+
+
+# ==============================================================================
 # Pipeline Orchestrator & CLI Runner
 # ==============================================================================
 
@@ -562,22 +791,55 @@ class BacktestPipeline:
             model=model,
         )
 
-        # 4. Save Artifacts
+        # 4. Vectorized Multi-Strategy Simulation (Sim1, Sim2, Sim3)
+        vector_sim = VectorSimulator(
+            initial_capital=self.initial_capital,
+            friction=TRANSACTION_FRICTION,
+            stop_loss_pct=STOP_LOSS_PCT,
+            take_profit_pct=TAKE_PROFIT_PCT,
+            holding_days=MAX_HOLDING_DAYS,
+            max_positions=DEFAULT_MAX_POSITIONS,
+        )
+        vec_preds, vec_equity_df, vec_comp_df = vector_sim.run_vector_simulation(
+            X_test=X_test,
+            raw_prices=raw_nse,
+            indices_df=indices,
+            model=model,
+            threshold=self.threshold,
+        )
+
+        # 5. Save Artifacts
         equity_csv_path = self.reports_dir / "equity_curve.csv"
         trade_log_csv_path = self.reports_dir / "trade_log.csv"
+        vec_preds_path = self.reports_dir / "vector_sim_predictions.parquet"
+        vec_equity_path = self.reports_dir / "vector_equity_curves.csv"
+        vec_comp_path = self.reports_dir / "vector_strategies_comparison.csv"
 
         equity_df.to_csv(equity_csv_path, index=False)
         trade_log_df.to_csv(trade_log_csv_path, index=False)
+        vec_preds.to_parquet(vec_preds_path, index=False)
+        vec_equity_df.to_csv(vec_equity_path, index=False)
+        vec_comp_df.to_csv(vec_comp_path, index=False)
 
         logger.info("Saved equity curve to %s (%d records)", equity_csv_path, len(equity_df))
         logger.info("Saved trade log to %s (%d executed trades)", trade_log_csv_path, len(trade_log_df))
+        logger.info("Saved vector simulation predictions to %s (%d records)", vec_preds_path, len(vec_preds))
+        logger.info("Saved vector equity curves to %s (%d records)", vec_equity_path, len(vec_equity_df))
+        logger.info("Saved vector strategies comparison to %s", vec_comp_path)
 
-        # 5. Display Executive Summary Table
-        self._print_executive_summary(summary, resolved_name)
+        summary["Vector_Comparison"] = vec_comp_df.to_dict(orient="records")
+
+        # 6. Display Executive Summary Table
+        self._print_executive_summary(summary, resolved_name, vec_comp_df)
 
         return summary
 
-    def _print_executive_summary(self, summary: Dict[str, Any], model_name: str) -> None:
+    def _print_executive_summary(
+        self,
+        summary: Dict[str, Any],
+        model_name: str,
+        vec_comp_df: Optional[pd.DataFrame] = None,
+    ) -> None:
         strat = summary["Strategy"]
         bench = summary["Benchmark"]
         stats = summary["Trade_Stats"]
@@ -595,8 +857,15 @@ class BacktestPipeline:
   Total Trades Executed:       {stats['Total Trades']:>10}
   Win Rate:                    {stats['Win Rate (%)']:>10.2f}%
   Profit Factor:               {stats['Profit Factor']:>10.2f}
-{'='*70}\n"""
+======================================================================
+"""
         print(table)
+
+        if vec_comp_df is not None and not vec_comp_df.empty:
+            vec_header = f"\n{'='*70}\n VECTORIZED MULTI-STRATEGY COMPARISON SUMMARY (Rubric 5.1 & 5.2)\n{'='*70}"
+            print(vec_header)
+            print(vec_comp_df.to_string(index=False))
+            print("="*70 + "\n")
 
 
 # ==============================================================================

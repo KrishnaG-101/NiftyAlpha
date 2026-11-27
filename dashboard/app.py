@@ -63,6 +63,26 @@ def load_trade_log(reports_dir: Path = REPORTS_DIR) -> Optional[pd.DataFrame]:
 
 
 @st.cache_data
+def load_vector_comparison(reports_dir: Path = REPORTS_DIR) -> Optional[pd.DataFrame]:
+    """Loads and caches the vectorized multi-strategy comparison table (Rubric 5.1 & 5.2)."""
+    path = reports_dir / "vector_strategies_comparison.csv"
+    if path.exists():
+        return pd.read_csv(path)
+    return None
+
+
+@st.cache_data
+def load_vector_equity_curves(reports_dir: Path = REPORTS_DIR) -> Optional[pd.DataFrame]:
+    """Loads and caches the daily vectorized multi-strategy equity curves."""
+    path = reports_dir / "vector_equity_curves.csv"
+    if path.exists():
+        df = pd.read_csv(path)
+        df["Date"] = pd.to_datetime(df["Date"])
+        return df.sort_values(by="Date").reset_index(drop=True)
+    return None
+
+
+@st.cache_data
 def load_metrics_report(reports_dir: Path = REPORTS_DIR) -> Optional[Dict[str, Any]]:
     """Loads and caches the compiled evaluation metrics JSON."""
     path = reports_dir / "metrics.json"
@@ -164,6 +184,47 @@ def render_plot(equity_df: pd.DataFrame) -> None:
         st.warning("Plotly is not installed; rendering fallback chart.")
         chart_data = equity_df.set_index("Date")[["Strategy_Value", "Benchmark_Value"]]
         st.line_chart(chart_data)
+
+
+def render_vector_plot(vec_equity_df: pd.DataFrame) -> None:
+    """Renders multi-line Plotly chart for Sim1, Sim2, Sim3, and Benchmark."""
+    try:
+        import plotly.graph_objects as go
+
+        fig = go.Figure()
+        series_meta = {
+            "Strategy_Sim1_Value": ("#AB63FA", "Sim1: Nominal (20d Unconstrained)", 2.0, "solid"),
+            "Strategy_Sim2_Value": ("#00CC96", "Sim2: Risk-Managed (Stop-Loss / Take-Profit)", 2.5, "solid"),
+            "Strategy_Sim3_Value": ("#FFA15A", "Sim3: Conviction-Weighted", 2.0, "solid"),
+            "Benchmark_Value": ("#636EFA", "Benchmark: Nifty 50 Index (^NSEI)", 2.0, "dot"),
+        }
+
+        for col, (color, label, width, dash) in series_meta.items():
+            if col in vec_equity_df.columns:
+                fig.add_trace(
+                    go.Scatter(
+                        x=vec_equity_df["Date"],
+                        y=vec_equity_df[col],
+                        mode="lines",
+                        name=label,
+                        line=dict(color=color, width=width, dash=dash),
+                        hovertemplate=f"<b>{label}</b>: ₹%{{y:,.2f}}<br><b>Date</b>: %{{x|%Y-%m-%d}}<extra></extra>",
+                    )
+                )
+
+        fig.update_layout(
+            title="Vectorized Simulation: Multi-Strategy Equity Curves vs. Benchmark",
+            xaxis_title="Date",
+            yaxis_title="Portfolio Valuation (INR)",
+            hovermode="x unified",
+            legend=dict(yanchor="top", y=0.99, xanchor="left", x=0.01),
+            margin=dict(l=20, r=20, t=50, b=20),
+            height=480,
+        )
+        st.plotly_chart(fig, use_container_width=True)
+
+    except ImportError:
+        st.line_chart(vec_equity_df.set_index("Date"))
 
 
 # ==============================================================================
@@ -378,6 +439,19 @@ def main() -> None:
                 st.dataframe(filtered_log, use_container_width=True, hide_index=True)
             else:
                 st.info("No trades executed during the test period with current parameters.")
+
+            st.markdown("---")
+            st.subheader("⚡ Vectorized Multi-Strategy Comparison (Rubric 5.1 & 5.2)")
+            st.caption("Side-by-side array backtest comparing 3 distinct strategy formulations on out-of-sample data.")
+
+            vec_comp_df = load_vector_comparison()
+            vec_equity_df = load_vector_equity_curves()
+
+            if vec_comp_df is not None:
+                st.dataframe(vec_comp_df, use_container_width=True, hide_index=True)
+
+            if vec_equity_df is not None:
+                render_vector_plot(vec_equity_df)
 
     # ==========================================================================
     # TAB 3: Model Explainability (SHAP)

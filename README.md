@@ -208,6 +208,27 @@ Academic backtests frequently inflate performance by assuming zero slippage, imm
 
 > **Quantitative Insight**: The 2024–2026 Indian market regime featured elevated geopolitical volatility, crude price spikes, and severe macro drawdowns (including the June 4, 2024 election crash where the Nifty 50 dropped -5.9% in a single session). NiftyAlpha's multi-layered risk model—combining **Macro India VIX gating (< 22)**, **hard stop-loss (-8%)**, and **time horizon exits**—crushed portfolio Max Drawdown from **-15.77% down to just -1.77% (an 88.8% risk reduction)** with a profitable Profit Factor of **1.52**, preserving capital across all 50 constituent equities, net of full 0.20% round-trip transaction friction and statutory Indian STT.
 
+### Vectorized Multi-Strategy Evaluation (Rubric 5.1 & 5.2)
+
+To satisfy **Rubric Section 5.1** (Vector simulations for at least 1 strategy) and **Rubric Section 5.2** (Two or more strategies covered with `sim1_`, `sim2_`, `sim3_` fields), NiftyAlpha incorporates a dedicated `VectorSimulator` engine in [`src/backtest.py`](src/backtest.py).
+
+The vector engine computes forward 20-day path barriers across all 157,174 daily observations and 50 equities in **0.09 seconds** using vectorized reverse-rolling array operations (`rolling(20).min().iloc[::-1].shift(-1)`), completely avoiding loop overhead. For every out-of-sample prediction row ($N = 34,791$), the engine generates strategy return and execution audit columns:
+
+- **`sim1_nominal_return` / `sim1_exit_reason`**: Baseline unconstrained buy-and-hold for the full 20-day horizon with zero risk barriers (benchmark for raw directional alpha).
+- **`sim2_risk_managed_return` / `sim2_exit_reason`**: Institutional execution with **-8% Stop-Loss**, **+15% Take-Profit**, and **20-day time exit** with 0.20% round-trip friction.
+- **`sim3_conviction_return` / `sim3_conviction_weight`**: Dynamic conviction-weighted allocation where position exposure scales linearly with model predicted probability confidence ($w_i \propto P(\text{Buy})$).
+
+#### Out-of-Sample Comparative Performance (2024–Present)
+
+| Strategy | Final Value (₹) | Total Return (%) | CAGR (%) | Max Drawdown (%) | Sharpe Ratio (Rf=7%) | Win Rate (%) | Profit Factor | Total Signals |
+| :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
+| **Sim1: Nominal (20d Unconstrained)** | ₹1,024,664.24 | **+2.47%** | **0.89%** | **-2.50%** | -6.09 | **52.6%** | **1.46** | 289 |
+| **Sim2: Risk-Managed (SL/TP)** | ₹974,807.82 | -2.52% | -0.92% | -5.11% | -7.71 | 43.6% | 0.84 | 289 |
+| **Sim3: Conviction-Weighted** | ₹974,877.05 | -2.51% | -0.92% | -5.39% | -7.19 | 43.6% | 0.86 | 289 |
+| **Benchmark: Nifty 50 Index (`^NSEI`)** | ₹1,046,513.82 | +4.65% | 1.66% | -15.77% | -0.31 | N/A | N/A | 1 |
+
+All prediction records, daily strategy equity curves, and KPI tables are persisted to [`reports/vector_sim_predictions.parquet`](reports/vector_sim_predictions.parquet), [`reports/vector_equity_curves.csv`](reports/vector_equity_curves.csv), and [`reports/vector_strategies_comparison.csv`](reports/vector_strategies_comparison.csv), and rendered interactively in **Tab 2** of the Streamlit Dashboard.
+
 ---
 
 ## 📓 Publication-Grade Research Notebooks
@@ -293,12 +314,14 @@ This project was built to satisfy all criteria of the DataTalksClub Stock Market
 | **Evaluation Metrics** | Precision-Recall curve analysis, probability threshold sweeps ($0.50$ to $0.65$), ROC-AUC, PR-AUC, F1-Score, and signal frequency. | [src/models.py](src/models.py)<br>[reports/metrics.json](reports/metrics.json) |
 | **Explainable AI (XAI)** | TreeExplainer SHAP summary plots and feature importance rankings isolating predictive drivers. | [src/models.py](src/models.py)<br>[02_model_experiments.ipynb](notebooks/02_model_experiments.ipynb) |
 | **Realistic Backtesting** | Day-by-day discrete chronological loop, 0.20% round-trip friction (STT + brokerage), max 5 positions, -8% Stop-Loss (with gap fill), +15% Take-Profit. | [src/backtest.py](src/backtest.py)<br>[03_trading_simulation.ipynb](notebooks/03_trading_simulation.ipynb) |
+| **Vector Simulations (Rubric 5.1)** | Vectorized path simulation engine computing forward barrier exits across 157k rows in 0.09s using reverse-rolling arrays. | [src/backtest.py](src/backtest.py)<br>[00_workflow_pipeline.ipynb](notebooks/00_workflow_pipeline.ipynb) |
+| **Multi-Strategy Comparison (Rubric 5.2)** | Three comparative strategies (`sim1_nominal`, `sim2_risk_managed`, `sim3_conviction`) evaluated side-by-side on 34k test records. | [reports/vector_strategies_comparison.csv](reports/vector_strategies_comparison.csv)<br>[dashboard/app.py](dashboard/app.py) |
 | **Strategy Benchmarking** | Full comparative metrics vs. Buy & Hold on Nifty 50 Index (`^NSEI`): CAGR, Max Drawdown, Annualized Sharpe (Rf=7%), Win Rate, Profit Factor. | [src/backtest.py](src/backtest.py)<br>[reports/equity_curve.csv](reports/equity_curve.csv) |
 | **CLI Orchestration** | Clean argparse router supporting individual commands (`fetch`, `features`, `train`, `simulate`) and end-to-end pipeline execution (`run_all`). | [main.py](main.py) |
 | **Workflow Demonstration** | End-to-end notebook importing from `src/` modules, executing ingestion, features, modeling, simulation, and live signal generation. | [00_workflow_pipeline.ipynb](notebooks/00_workflow_pipeline.ipynb) |
 | **Interactive UI** | 3-tab Streamlit dashboard: Live Signals, Plotly Equity Curve & Trade Audit, SHAP Feature Importance. | [dashboard/app.py](dashboard/app.py) |
 | **Containerization** | Production multi-stage Dockerfile compiling C TA-Lib and installing locked requirements. | [Dockerfile](Dockerfile) |
-| **Automated Testing** | 17 unit tests verifying ingestion, features, modeling, thresholding, simulation logic, and dashboard loaders. | [tests/](tests/) |
+| **Automated Testing** | 18 unit tests verifying ingestion, features, modeling, thresholding, vector simulation, and dashboard loaders. | [tests/](tests/) |
 
 ---
 
@@ -427,7 +450,10 @@ NiftyAlpha/
 │   ├── metrics.json               # Compiled ROC-AUC, PR-AUC & threshold stats
 │   ├── validation_predictions.parquet # Out-of-fold validation probabilities
 │   ├── equity_curve.csv           # Daily strategy and benchmark equity curves
-│   └── trade_log.csv              # Granular trade execution audit trail
+│   ├── trade_log.csv              # Granular trade execution audit trail
+│   ├── vector_sim_predictions.parquet # 34,791 prediction rows with sim1_, sim2_, sim3_ returns & exits
+│   ├── vector_equity_curves.csv   # Daily equity curves for nominal, risk-managed, and conviction strategies
+│   └── vector_strategies_comparison.csv # Comparative KPI table (CAGR, Sharpe, Drawdown, Win Rate, PF)
 ├── notebooks/                     # Executed Jupyter research notebooks
 │   ├── 00_workflow_pipeline.ipynb # Master end-to-end modular pipeline demonstration
 │   ├── 01_eda_and_data.ipynb      # EDA, holiday alignment, feature engineering
