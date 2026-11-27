@@ -18,6 +18,7 @@ from dashboard.app import (
     load_vector_comparison,
     load_vector_equity_curves,
     load_active_long_short_data,
+    load_latest_daily_orders,
 )
 from main import run_fetch, run_features, run_train, run_simulate
 
@@ -33,6 +34,8 @@ def test_dashboard_loaders_nonexistent(tmp_path: Path):
     assert load_vector_equity_curves(reports_dir=tmp_path) is None
     act_eq, act_tr, act_sm = load_active_long_short_data(reports_dir=tmp_path)
     assert act_eq is None and act_tr is None and act_sm is None
+    daily_orders, daily_meta = load_latest_daily_orders(reports_dir=tmp_path)
+    assert daily_orders is None and daily_meta is None
     model, name = load_trained_model(models_dir=tmp_path)
     assert model is None
     assert name == "none"
@@ -68,3 +71,18 @@ def test_dashboard_loaders_with_data(tmp_path: Path):
     assert act_tr is not None
     assert act_sm is not None
     assert len(act_eq) == 2
+
+    # Mock daily orders
+    orders_df = pd.DataFrame({
+        "ticker": ["INFY.NS"],
+        "action": ["BUY"],
+        "confidence_score": [0.65],
+    })
+    orders_df.to_csv(reports_dir / "latest_daily_orders.csv", index=False)
+    with open(reports_dir / "latest_daily_orders.json", "w") as f:
+        json.dump({"metadata": {"signal_date": "2024-01-02", "buy_orders_count": 1}, "orders": []}, f)
+
+    daily_df, daily_meta = load_latest_daily_orders(reports_dir=reports_dir)
+    assert daily_df is not None
+    assert len(daily_df) == 1
+    assert daily_meta["buy_orders_count"] == 1

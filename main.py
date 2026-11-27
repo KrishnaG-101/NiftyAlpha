@@ -98,6 +98,27 @@ def run_simulate(threshold: float = 0.525) -> None:
     logger.info(">>> [Phase 5/5] Trading Simulation Completed.")
 
 
+def run_predict(
+    date: str = None,
+    threshold: float = 0.50,
+    model: str = "xgboost",
+) -> None:
+    """Executes Automated Daily Cron Predictor & Order Generator."""
+    logger.info(">>> [Phase 6] Initiating Daily Order Generation (Model=%s, Thresh=%.2f)...", model, threshold)
+    from scripts.daily_predict import DailyPredictor
+
+    predictor = DailyPredictor(
+        processed_dir=PROCESSED_DIR,
+        raw_dir=RAW_DIR,
+        models_dir=MODELS_DIR,
+        reports_dir=REPORTS_DIR,
+        model_name=model,
+        threshold=threshold,
+    )
+    predictor.run(target_date=date)
+    logger.info(">>> [Phase 6] Daily Order Generation Completed.")
+
+
 def run_all(
     force: bool = False,
     threshold: float = 0.525,
@@ -149,6 +170,12 @@ def main() -> None:
     p_sim = subparsers.add_parser("simulate", help="Run day-by-day backtest simulation on test set")
     p_sim.add_argument("--threshold", type=float, default=0.525, help="Confidence threshold for buy signals")
 
+    # Subcommand: predict (Automated Cron / Daily Order Generation)
+    p_pred = subparsers.add_parser("predict", help="Generate actionable daily trade orders for tomorrow")
+    p_pred.add_argument("--date", type=str, default=None, help="Target market date ('YYYY-MM-DD')")
+    p_pred.add_argument("--threshold", type=float, default=0.50, help="Confidence threshold for buy orders")
+    p_pred.add_argument("--model", type=str, default="xgboost", help="Model architecture to use")
+
     # Subcommand: run_all
     p_all = subparsers.add_parser("run_all", help="Execute complete pipeline end-to-end")
     p_all.add_argument("--force", action="store_true", default=False, help="Force fresh download during fetch stage")
@@ -171,6 +198,12 @@ def main() -> None:
         )
     elif args.command == "simulate":
         run_simulate(threshold=args.threshold)
+    elif args.command == "predict":
+        run_predict(
+            date=args.date,
+            threshold=args.threshold,
+            model=args.model,
+        )
     elif args.command == "run_all":
         run_all(
             force=args.force,

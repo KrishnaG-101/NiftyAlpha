@@ -53,9 +53,9 @@ desktop.ini
 *~
 
 # ==============================================================================
-# Internal Helper Scripts
+# Internal Helper Scripts (preserve core operational and cron scripts)
 # ==============================================================================
-scripts/
+scripts/__pycache__/
 
 # ==============================================================================
 # Build & Distribution

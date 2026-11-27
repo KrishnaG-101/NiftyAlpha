@@ -357,6 +357,52 @@ To ensure seamless execution across diverse Python environments and prevent prot
 
 ---
 
+## ⏰ Automated Cron & Scheduled Daily Predictor (Rubric Section 6.3)
+
+To satisfy **Rubric Section 6.3** (*The full system can be re-run via Cron job and generate predictions for the last available data — 1 point*), NiftyAlpha includes a standalone, production-ready daily inference and order generation pipeline in [`scripts/daily_predict.py`](scripts/daily_predict.py), wrapped by automated scripts for both Linux (`cron_daily_predict.sh`) and Windows (`cron_daily_predict.bat`).
+
+### End-of-Day Production Workflow
+Every weekday at Indian market close (**15:45 IST / 10:15 UTC**), the scheduler:
+1. Slices the latest available market date from the feature dataset.
+2. Loads the calibrated model artifact ([`models/xgboost_model.joblib`](models/xgboost_model.joblib)) and scales feature matrices without lookahead leakage.
+3. Computes directional confidence scores for all 50 constituent equities.
+4. Generates deterministic trade manifests with -8% stop loss and +15% take profit target barriers.
+5. Persists tomorrow's actionable orders to:
+   - `reports/daily_orders_<YYYY-MM-DD>.csv` and `.json` (dated archive)
+   - `reports/latest_daily_orders.csv` and `.json` (active production pointer)
+   - Appends execution timestamps and audit outputs to `logs/cron_daily_predict.log`.
+
+### Automated Linux / macOS Crontab Setup
+
+Configure your user crontab (`crontab -e`):
+
+```bash
+# Execute NiftyAlpha daily inference every weekday at 15:45 IST (10:15 UTC)
+45 15 * * 1-5 /bin/bash /path/to/NiftyAlpha/scripts/cron_daily_predict.sh >> /path/to/NiftyAlpha/logs/cron_daily_predict.log 2>&1
+```
+
+### Windows Task Scheduler Setup (PowerShell)
+
+Register the automated task on Windows via PowerShell:
+
+```powershell
+$Action = New-ScheduledTaskAction -Execute "E:\Code\Projects\NiftyAlpha\scripts\cron_daily_predict.bat"
+$Trigger = New-ScheduledTaskTrigger -Weekly -DaysOfWeek Monday,Tuesday,Wednesday,Thursday,Friday -At 3:45PM
+Register-ScheduledTask -Action $Action -Trigger $Trigger -TaskName "NiftyAlpha_Daily_Predict" -Description "Daily automated NiftyAlpha trade order generation"
+```
+
+### Manual CLI Execution
+
+```bash
+# Generate orders for the latest available market session
+python main.py predict --threshold 0.50
+
+# Generate orders for a specific historical date
+python main.py predict --date 2024-01-02 --threshold 0.50
+```
+
+---
+
 ## 📋 DataTalksClub Zoomcamp Rubric Checklist
 
 This project was built to satisfy all criteria of the DataTalksClub Stock Market Analytics Zoomcamp rubric:
@@ -379,9 +425,10 @@ This project was built to satisfy all criteria of the DataTalksClub Stock Market
 | **Strategy Benchmarking** | Full comparative metrics vs. Buy & Hold on Nifty 50 Index (`^NSEI`): CAGR, Max Drawdown, Annualized Sharpe (Rf=7%), Win Rate, Profit Factor. | [src/backtest.py](src/backtest.py)<br>[reports/equity_curve.csv](reports/equity_curve.csv) |
 | **CLI Orchestration** | Clean argparse router supporting individual commands (`fetch`, `features`, `train`, `simulate`) and end-to-end pipeline execution (`run_all`). | [main.py](main.py) |
 | **Workflow Demonstration** | End-to-end notebook importing from `src/` modules, executing ingestion, features, modeling, simulation, and live signal generation. | [00_workflow_pipeline.ipynb](notebooks/00_workflow_pipeline.ipynb) |
+| **Cron Job Automation (Rubric 6.3)** | Automated standalone cron/scheduler scripts (`scripts/cron_daily_predict.sh` / `.bat`) executing end-of-day inference and persisting tomorrow's orders (`reports/daily_orders_<date>.csv`). | [scripts/daily_predict.py](scripts/daily_predict.py)<br>[scripts/cron_daily_predict.sh](scripts/cron_daily_predict.sh) |
 | **Interactive UI** | 3-tab Streamlit dashboard: Live Signals, Plotly Equity Curve & Trade Audit, SHAP Feature Importance. | [dashboard/app.py](dashboard/app.py) |
 | **Containerization** | Production multi-stage Dockerfile compiling C TA-Lib and installing locked requirements. | [Dockerfile](Dockerfile) |
-| **Automated Testing** | 22 unit tests verifying ingestion, features, modeling, hyperparameter tuning with TimeSeriesSplit, thresholding, vector simulation, active long-short engine, and dashboard loaders. | [tests/](tests/) |
+| **Automated Testing** | 25 unit tests verifying ingestion, features, modeling, tuning, simulation, active long-short engine, daily cron orders, and dashboard loaders. | [tests/](tests/) |
 
 ---
 
@@ -517,12 +564,19 @@ NiftyAlpha/
 │   ├── vector_strategies_comparison.csv # Comparative KPI table (CAGR, Sharpe, Drawdown, Win Rate, PF)
 │   ├── active_long_short_equity.csv # Daily portfolio and benchmark equity curves for Active Long-Short strategy
 │   ├── active_long_short_trades.csv # Granular trade log of 116 executed long and short positions
-│   └── active_long_short_summary.json # Serialized performance KPIs (Return, CAGR, Sharpe, Win Rate, Profit Factor)
+│   ├── active_long_short_summary.json # Serialized performance KPIs (Return, CAGR, Sharpe, Win Rate, Profit Factor)
+│   ├── latest_daily_orders.csv    # Tomorrow's actionable trade order manifest generated by cron
+│   └── latest_daily_orders.json   # Machine-readable order manifest and execution metadata
 ├── notebooks/                     # Executed Jupyter research notebooks
 │   ├── 00_workflow_pipeline.ipynb # Master end-to-end modular pipeline demonstration
 │   ├── 01_eda_and_data.ipynb      # EDA, holiday alignment, feature engineering
 │   ├── 02_model_experiments.ipynb # Model benchmarking, PR curves & SHAP XAI
 │   └── 03_trading_simulation.ipynb# Realistic backtesting & performance plots
+├── scripts/                       # Operational & cron execution scripts
+│   ├── daily_predict.py           # Phase 6: Automated end-of-day inference & order generator
+│   ├── cron_daily_predict.sh      # Linux/macOS crontab wrapper with logging
+│   ├── cron_daily_predict.bat     # Windows Task Scheduler batch wrapper
+│   └── execute_notebooks.py       # In-process research notebook executor
 ├── src/                           # Production source modules
 │   ├── fetch_data.py              # Phase 2: Multi-source data ingestion pipeline
 │   ├── features.py                # Phase 3: Feature extraction & temporal splits
@@ -530,11 +584,14 @@ NiftyAlpha/
 │   └── backtest.py                # Phase 5: Realistic simulation engine
 ├── dashboard/
 │   └── app.py                     # Streamlit 3-tab interactive web dashboard
+├── logs/                          # Cron execution audit logs
+│   └── cron_daily_predict.log     # Timestamped daily cron execution log
 ├── tests/                         # Pytest automated test suite
 │   ├── test_fetch_data.py         # Tests for data ingestion & error handling
 │   ├── test_features.py           # Tests for feature formulas & leakage prevention
-│   ├── test_models.py             # Tests for model training & thresholding
+│   ├── test_models.py             # Tests for model training, tuning & thresholding
 │   ├── test_backtest.py           # Tests for simulation loop & friction accounting
+│   ├── test_daily_predict.py      # Tests for daily cron predictor & order manifest structure
 │   └── test_dashboard.py          # Tests for dashboard caching & loaders
 ├── run_dashboard.bat              # One-click Windows dashboard launcher
 ├── run_dashboard.ps1              # PowerShell dashboard launcher
