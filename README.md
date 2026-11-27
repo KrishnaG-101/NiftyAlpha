@@ -2,9 +2,9 @@
 
 [![Python Version](https://img.shields.io/badge/python-3.10%20%7C%203.11%20%7C%203.12%20%7C%203.14-blue.svg)](https://www.python.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Streamlit App](https://img.shields.io/badge/Streamlit-UI%20Live-FF4B4B.svg)](https://streamlit.io/)
+[![Open in Streamlit](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://niftyalpha.streamlit.app)
 [![Docker Support](https://img.shields.io/badge/Docker-Ready-2496ED.svg)](https://www.docker.com/)
-[![Tests](https://img.shields.io/badge/pytest-17%20passed-brightgreen.svg)](tests/)
+[![Tests](https://img.shields.io/badge/pytest-26%20passed-brightgreen.svg)](tests/)
 
 > **Capstone Project for the DataTalksClub Stock Market Analytics Zoomcamp**  
 > *Author: Krishna Gelra*
@@ -428,7 +428,8 @@ This project was built to satisfy all criteria of the DataTalksClub Stock Market
 | **Cron Job Automation (Rubric 6.3)** | Automated standalone cron/scheduler scripts (`scripts/cron_daily_predict.sh` / `.bat`) executing end-of-day inference and persisting tomorrow's orders (`reports/daily_orders_<date>.csv`). | [scripts/daily_predict.py](scripts/daily_predict.py)<br>[scripts/cron_daily_predict.sh](scripts/cron_daily_predict.sh) |
 | **Interactive UI** | 3-tab Streamlit dashboard: Live Signals, Plotly Equity Curve & Trade Audit, SHAP Feature Importance. | [dashboard/app.py](dashboard/app.py) |
 | **Containerization** | Production multi-stage Dockerfile compiling C TA-Lib and installing locked requirements. | [Dockerfile](Dockerfile) |
-| **Automated Testing** | 25 unit tests verifying ingestion, features, modeling, tuning, simulation, active long-short engine, daily cron orders, and dashboard loaders. | [tests/](tests/) |
+| **Cloud Deployment (Rubric 7.5)** | Streamlit Community Cloud 1-click deployment configuration (`.streamlit/config.toml`), zero-compilation cloud dependencies, and live public deployment instructions. | [.streamlit/config.toml](.streamlit/config.toml)<br>[README.md](README.md#option-4-%EF%B8%8F-1-click-cloud-deployment-via-streamlit-community-cloud-rubric-75) |
+| **Automated Testing** | 26 unit tests verifying ingestion, features, modeling, tuning, simulation, active long-short engine, daily cron orders, cloud config, and dashboard loaders. | [tests/](tests/) |
 
 ---
 
@@ -525,10 +526,31 @@ docker run -p 8501:8501 niftyalpha streamlit run dashboard/app.py --server.port=
 
 ---
 
+### Option 4: ☁️ 1-Click Cloud Deployment via Streamlit Community Cloud (Rubric 7.5)
+
+The interactive dashboard is configured for instant, zero-configuration cloud hosting on **Streamlit Community Cloud** (free, public web deployment):
+
+[![Open in Streamlit](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://niftyalpha.streamlit.app)
+
+#### 1-Click Deployment Instructions:
+1. **Fork or Push**: Fork or push this repository to your GitHub account.
+2. **Access Streamlit Cloud**: Navigate to [share.streamlit.io](https://share.streamlit.io/) and sign in with your GitHub credentials.
+3. **Deploy New App**: Click **"New app"** and fill in the deployment fields:
+   - **Repository**: `your-username/NiftyAlpha`
+   - **Branch**: `main`
+   - **Main file path**: `dashboard/app.py`
+   - **App URL**: `niftyalpha.streamlit.app` (or custom subdomain)
+4. **Deploy**: Click **"Deploy!"**.
+5. **Automated Cloud Config**: Streamlit Cloud automatically picks up [`.streamlit/config.toml`](.streamlit/config.toml) with our production dark slate palette, headless server settings, and XSRF protection. The app launches immediately with pre-computed out-of-sample curves, active long-short alpha, SHAP explainability charts, and live order directives.
+
+---
+
 ## 📂 Repository Directory Layout
 
 ```
 NiftyAlpha/
+├── .streamlit/                    # Streamlit Community Cloud production configuration
+│   └── config.toml                # Dark theme palette, server port, CORS & security parameters
 ├── assets/                        # High-resolution UI screenshots & visual assets
 │   ├── dashboard_signals.png      # Tab 1: Live trading signals & probability gauges
 │   ├── dashboard_backtest.png     # Tab 2: Out-of-sample Plotly equity curve & trade log

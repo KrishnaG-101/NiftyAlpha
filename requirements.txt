@@ -9,7 +9,8 @@ yfinance
 pandas-datareader
 
 # Technical Analysis & Quantitative Indicators
-ta-lib; platform_system != "Windows"
+# Note: Pure NumPy/Pandas vector implementations are included for all indicators,
+# ensuring seamless zero-compilation deployment on Streamlit Cloud & Linux.
 pandas-ta; python_version < "3.14"
 
 # Machine Learning & Explainability

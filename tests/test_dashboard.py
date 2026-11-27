@@ -86,3 +86,17 @@ def test_dashboard_loaders_with_data(tmp_path: Path):
     assert daily_df is not None
     assert len(daily_df) == 1
     assert daily_meta["buy_orders_count"] == 1
+
+
+def test_streamlit_cloud_config():
+    """Verify .streamlit/config.toml exists and contains required production settings."""
+    project_root = Path(__file__).resolve().parent.parent
+    config_file = project_root / ".streamlit" / "config.toml"
+    assert config_file.exists(), "Missing .streamlit/config.toml production configuration"
+
+    content = config_file.read_text(encoding="utf-8")
+    assert "[theme]" in content
+    assert "[server]" in content
+    assert "[browser]" in content
+    assert "headless = true" in content
+    assert "primaryColor" in content

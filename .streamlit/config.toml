@@ -1,0 +1,31 @@
+# ==============================================================================
+# NiftyAlpha - Streamlit Community Cloud Production Configuration
+# ==============================================================================
+# Production settings optimized for low-latency cloud hosting on share.streamlit.io.
+# Rubric Criteria: Section 7.5 (Cloud Deployment Bonus - 1 point).
+# ==============================================================================
+
+[theme]
+primaryColor = "#3B82F6"
+backgroundColor = "#0B0F19"
+secondaryBackgroundColor = "#1E293B"
+textColor = "#F8FAFC"
+font = "sans serif"
+
+[server]
+headless = true
+enableCORS = false
+enableXsrfProtection = true
+maxUploadSize = 200
+port = 8501
+address = "0.0.0.0"
+
+[browser]
+gatherUsageStats = false
+
+[client]
+showErrorDetails = false
+toolbarMode = "minimal"
+
+[runner]
+magicEnabled = false
