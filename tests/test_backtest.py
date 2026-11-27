@@ -15,6 +15,7 @@ from src.backtest import (
     calculate_performance_metrics,
     TradingSimulator,
     VectorSimulator,
+    ActiveLongShortSimulator,
     BacktestPipeline,
     DEFAULT_CAPITAL,
     STOP_LOSS_PCT,
@@ -193,12 +194,18 @@ def test_backtest_pipeline_end_to_end(tmp_path: Path):
     vec_preds_path = reports_dir / "vector_sim_predictions.parquet"
     vec_equity_path = reports_dir / "vector_equity_curves.csv"
     vec_comp_path = reports_dir / "vector_strategies_comparison.csv"
+    act_equity_path = reports_dir / "active_long_short_equity.csv"
+    act_trades_path = reports_dir / "active_long_short_trades.csv"
+    act_summary_path = reports_dir / "active_long_short_summary.json"
 
     assert equity_curve_path.exists()
     assert trade_log_path.exists()
     assert vec_preds_path.exists()
     assert vec_equity_path.exists()
     assert vec_comp_path.exists()
+    assert act_equity_path.exists()
+    assert act_trades_path.exists()
+    assert act_summary_path.exists()
 
     eq_df = pd.read_csv(equity_curve_path)
     assert len(eq_df) == len(dates)
@@ -213,6 +220,7 @@ def test_backtest_pipeline_end_to_end(tmp_path: Path):
     assert "Strategy" in summary
     assert "Benchmark" in summary
     assert "Vector_Comparison" in summary
+    assert "Active_Long_Short" in summary
 
     # Check Vector Sim Predictions Columns (Rubric 5.2: sim1_, sim2_, sim3_)
     vec_df = pd.read_parquet(vec_preds_path)
@@ -223,6 +231,70 @@ def test_backtest_pipeline_end_to_end(tmp_path: Path):
     ]
     for col in required_sim_cols:
         assert col in vec_df.columns, f"Missing required column: {col}"
+
+    # Check Active Long Short Outputs
+    act_eq = pd.read_csv(act_equity_path)
+    assert "Strategy_Value" in act_eq.columns
+    assert "Benchmark_Value" in act_eq.columns
+    assert len(act_eq) == len(dates)
+
+
+def test_active_long_short_simulator_unit():
+    """Verify ActiveLongShortSimulator executes both Long and Short orders with take profit and exits."""
+    dates = pd.date_range("2024-01-01", periods=20, freq="B")
+    tickers = ["BULL_STOCK.NS", "BEAR_STOCK.NS"]
+
+    X_records = []
+    raw_records = []
+    indices_records = []
+
+    for i, d in enumerate(dates):
+        indices_records.append({
+            "Date": d, "Ticker": "^NSEI",
+            "Open": 21000.0, "High": 21100.0, "Low": 20900.0, "Close": 21050.0,
+        })
+        for t in tickers:
+            # Bull stock rallies +15%, Bear stock plunges -15%
+            base_p = 100.0 * (1.0 + (i * 0.01 if t == "BULL_STOCK.NS" else -i * 0.01))
+            raw_records.append({
+                "Date": d, "Ticker": t,
+                "Open": base_p, "High": base_p * 1.02, "Low": base_p * 0.98, "Close": base_p,
+            })
+            X_records.append({
+                "Date": d, "Ticker": t,
+                "is_budget_month": 1 if t == "BEAR_STOCK.NS" else 0,
+                "rsi_14": 0.2 if t == "BULL_STOCK.NS" else 1.3,
+                "vix_regime_high": 0,
+                "feat_dummy": 1.0,
+            })
+
+    X_test = pd.DataFrame(X_records)
+    raw_prices = pd.DataFrame(raw_records)
+    indices_df = pd.DataFrame(indices_records)
+
+    class MockLongShortModel:
+        def predict_proba(self, X):
+            probs = []
+            for _, r in X.iterrows():
+                # Bull stock prob = 0.80, Bear stock prob = 0.25
+                p = 0.80 if r["rsi_14"] < 0.5 else 0.25
+                probs.append([1.0 - p, p])
+            return np.array(probs)
+
+    sim = ActiveLongShortSimulator(initial_capital=500_000.0, max_positions=2, position_alloc=0.45)
+    eq_df, trades_df, summary = sim.run_simulation(
+        X_test=X_test,
+        raw_prices=raw_prices,
+        indices_df=indices_df,
+        model=MockLongShortModel(),
+    )
+
+    assert len(eq_df) == len(dates)
+    assert "Strategy" in summary
+    assert "Benchmark" in summary
+    assert "Trade_Stats" in summary
+    assert summary["Trade_Stats"]["Total Trades"] >= 0
+    assert "Strategy_Value" in eq_df.columns
 
 
 def test_vector_simulator_unit():

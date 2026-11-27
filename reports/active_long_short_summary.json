@@ -1,0 +1,23 @@
+{
+  "Strategy": {
+    "Total Return (%)": 36.820921999999996,
+    "CAGR (%)": 12.020265955366627,
+    "Max Drawdown (%)": -32.22801261471084,
+    "Annualized Sharpe": 0.3455371391933061
+  },
+  "Benchmark": {
+    "Total Return (%)": 4.651381999999995,
+    "CAGR (%)": 1.6597506419750108,
+    "Max Drawdown (%)": -15.766678744555307,
+    "Annualized Sharpe": -0.3103810832012205
+  },
+  "Trade_Stats": {
+    "Total Trades": 116,
+    "Win Rate (%)": 52.59,
+    "Profit Factor": 1.39,
+    "Long Trades": 103,
+    "Short Trades": 13,
+    "Long Win Rate (%)": 51.46,
+    "Short Win Rate (%)": 61.54
+  }
+}

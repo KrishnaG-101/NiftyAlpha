@@ -15,6 +15,9 @@ from dashboard.app import (
     load_test_features,
     load_raw_equities,
     load_trained_model,
+    load_vector_comparison,
+    load_vector_equity_curves,
+    load_active_long_short_data,
 )
 from main import run_fetch, run_features, run_train, run_simulate
 
@@ -26,6 +29,10 @@ def test_dashboard_loaders_nonexistent(tmp_path: Path):
     assert load_metrics_report(reports_dir=tmp_path) is None
     assert load_test_features(processed_dir=tmp_path) is None
     assert load_raw_equities(raw_dir=tmp_path) is None
+    assert load_vector_comparison(reports_dir=tmp_path) is None
+    assert load_vector_equity_curves(reports_dir=tmp_path) is None
+    act_eq, act_tr, act_sm = load_active_long_short_data(reports_dir=tmp_path)
+    assert act_eq is None and act_tr is None and act_sm is None
     model, name = load_trained_model(models_dir=tmp_path)
     assert model is None
     assert name == "none"
@@ -48,3 +55,16 @@ def test_dashboard_loaders_with_data(tmp_path: Path):
     assert loaded_eq is not None
     assert len(loaded_eq) == 2
     assert pd.api.types.is_datetime64_any_dtype(loaded_eq["Date"])
+
+    # Mock active long short data
+    equity_df.to_csv(reports_dir / "active_long_short_equity.csv", index=False)
+    pd.DataFrame({"Ticker": ["TCS.NS"], "Type": ["LONG"], "Return_Pct": [5.2]}).to_csv(reports_dir / "active_long_short_trades.csv", index=False)
+    import json
+    with open(reports_dir / "active_long_short_summary.json", "w") as f:
+        json.dump({"Strategy": {"Total Return (%)": 36.82}}, f)
+
+    act_eq, act_tr, act_sm = load_active_long_short_data(reports_dir=reports_dir)
+    assert act_eq is not None
+    assert act_tr is not None
+    assert act_sm is not None
+    assert len(act_eq) == 2
