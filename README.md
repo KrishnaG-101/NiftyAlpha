@@ -212,7 +212,11 @@ Academic backtests frequently inflate performance by assuming zero slippage, imm
 
 ## 📓 Publication-Grade Research Notebooks
 
-The `notebooks/` directory contains three fully executed, publication-grade Jupyter research notebooks (each containing 20+ structured cells with mathematical formulations, code, and persisted high-resolution visualizations):
+The `notebooks/` directory contains four fully executed, publication-grade Jupyter research notebooks (each containing structured cells with mathematical formulations, code, and persisted high-resolution visualizations):
+
+### 0. [00_workflow_pipeline.ipynb](notebooks/00_workflow_pipeline.ipynb) — Master End-to-End Workflow Demonstration
+- **Rubric Section 6.1 Compliance**: Single executive demonstration notebook directly importing and orchestrating all four modular production packages (`from src.fetch_data import ...`, `from src.features import ...`, `from src.models import ...`, `from src.backtest import ...`).
+- **Interactive Demonstration**: Executes multi-source ingestion, feature extraction, temporal splits (Train: 95.7k, Val: 24.6k, Test: 34.7k), 5-model training suite, realistic simulation, and generates next-day live trade signals for all 50 constituent equities.
 
 ### 1. [01_eda_and_data.ipynb](notebooks/01_eda_and_data.ipynb) — Multi-Universe Ingestion, Cross-Asset EDA & Statistical Stationarity
 - **Multi-Source Sourcing**: 50 Nifty constituents, BSE volume divergence, indices (`^NSEI`, `^BSESN`, `^INDIAVIX`), and macro indicators (Brent Crude `BZ=F`, USD/INR `INR=X`, US 10Y Yields `DGS10`, Gold `GC=F`).
@@ -291,6 +295,7 @@ This project was built to satisfy all criteria of the DataTalksClub Stock Market
 | **Realistic Backtesting** | Day-by-day discrete chronological loop, 0.20% round-trip friction (STT + brokerage), max 5 positions, -8% Stop-Loss (with gap fill), +15% Take-Profit. | [src/backtest.py](src/backtest.py)<br>[03_trading_simulation.ipynb](notebooks/03_trading_simulation.ipynb) |
 | **Strategy Benchmarking** | Full comparative metrics vs. Buy & Hold on Nifty 50 Index (`^NSEI`): CAGR, Max Drawdown, Annualized Sharpe (Rf=7%), Win Rate, Profit Factor. | [src/backtest.py](src/backtest.py)<br>[reports/equity_curve.csv](reports/equity_curve.csv) |
 | **CLI Orchestration** | Clean argparse router supporting individual commands (`fetch`, `features`, `train`, `simulate`) and end-to-end pipeline execution (`run_all`). | [main.py](main.py) |
+| **Workflow Demonstration** | End-to-end notebook importing from `src/` modules, executing ingestion, features, modeling, simulation, and live signal generation. | [00_workflow_pipeline.ipynb](notebooks/00_workflow_pipeline.ipynb) |
 | **Interactive UI** | 3-tab Streamlit dashboard: Live Signals, Plotly Equity Curve & Trade Audit, SHAP Feature Importance. | [dashboard/app.py](dashboard/app.py) |
 | **Containerization** | Production multi-stage Dockerfile compiling C TA-Lib and installing locked requirements. | [Dockerfile](Dockerfile) |
 | **Automated Testing** | 17 unit tests verifying ingestion, features, modeling, thresholding, simulation logic, and dashboard loaders. | [tests/](tests/) |
@@ -424,6 +429,7 @@ NiftyAlpha/
 │   ├── equity_curve.csv           # Daily strategy and benchmark equity curves
 │   └── trade_log.csv              # Granular trade execution audit trail
 ├── notebooks/                     # Executed Jupyter research notebooks
+│   ├── 00_workflow_pipeline.ipynb # Master end-to-end modular pipeline demonstration
 │   ├── 01_eda_and_data.ipynb      # EDA, holiday alignment, feature engineering
 │   ├── 02_model_experiments.ipynb # Model benchmarking, PR curves & SHAP XAI
 │   └── 03_trading_simulation.ipynb# Realistic backtesting & performance plots
