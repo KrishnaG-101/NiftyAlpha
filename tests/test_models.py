@@ -15,6 +15,8 @@ from src.models import (
     get_model_instances,
     evaluate_model_at_thresholds,
     get_shap_explainer,
+    tune_hyperparameters,
+    PARAM_SEARCH_SPACES,
     ModelTrainingPipeline,
     EVAL_THRESHOLDS,
 )
@@ -158,3 +160,105 @@ def test_shap_explainer_dispatch():
     except ImportError:
         with pytest.raises(ImportError):
             get_shap_explainer(model, sample_df)
+
+
+def test_tune_hyperparameters_unit():
+    """Verify tune_hyperparameters executes TimeSeriesSplit tuning on synthetic data."""
+    np.random.seed(42)
+    n_samples = 60
+    n_features = 4
+    X = pd.DataFrame(np.random.randn(n_samples, n_features), columns=[f"f_{i}" for i in range(n_features)])
+    y = np.random.choice([0, 1], size=n_samples, p=[0.5, 0.5])
+
+    best_model, best_params, best_score, cv_results = tune_hyperparameters(
+        model_name="decision_tree",
+        X_train=X,
+        y_train=y,
+        n_splits=3,
+        n_iter=3,
+        scoring="average_precision",
+        random_state=42,
+    )
+
+    assert best_model is not None
+    assert isinstance(best_params, dict)
+    assert "max_depth" in best_params or "min_samples_leaf" in best_params
+    assert isinstance(best_score, float)
+    assert isinstance(cv_results, pd.DataFrame)
+    assert len(cv_results) > 0
+
+    # Ensure model is fitted and can generate predictions
+    probs = best_model.predict_proba(X)[:, 1]
+    assert len(probs) == n_samples
+    assert np.all((probs >= 0.0) & (probs <= 1.0))
+
+
+def test_tune_hyperparameters_validation_and_errors():
+    """Verify tune_hyperparameters parameter validation and unknown model error handling."""
+    X = pd.DataFrame(np.random.randn(20, 2), columns=["a", "b"])
+    y = np.array([0, 1] * 10)
+
+    # Test unknown model error
+    with pytest.raises(ValueError, match="Unknown model_name"):
+        tune_hyperparameters("nonexistent_architecture", X, y, n_splits=2)
+
+
+def test_pipeline_with_tuning(tmp_path: Path):
+    """Verify ModelTrainingPipeline with tune=True executes tuning and saves hyperparameter report."""
+    processed_dir = tmp_path / "processed"
+    models_dir = tmp_path / "models"
+    reports_dir = tmp_path / "reports"
+    processed_dir.mkdir(parents=True)
+
+    np.random.seed(42)
+    n_train = 60
+    n_val = 20
+    n_features = 4
+    feature_cols = [f"feat_{i}" for i in range(n_features)]
+
+    train_dates = pd.date_range("2020-01-01", periods=n_train, freq="B")
+    X_train_df = pd.DataFrame(np.random.randn(n_train, n_features), columns=feature_cols)
+    X_train_df.insert(0, "Ticker", "TCS.NS")
+    X_train_df.insert(0, "Date", train_dates)
+    y_train_df = pd.DataFrame({
+        "Date": train_dates,
+        "Ticker": "TCS.NS",
+        "target_alpha_outperform": np.random.choice([0, 1], size=n_train),
+    })
+
+    val_dates = pd.date_range("2022-01-01", periods=n_val, freq="B")
+    X_val_df = pd.DataFrame(np.random.randn(n_val, n_features), columns=feature_cols)
+    X_val_df.insert(0, "Ticker", "TCS.NS")
+    X_val_df.insert(0, "Date", val_dates)
+    y_val_df = pd.DataFrame({
+        "Date": val_dates,
+        "Ticker": "TCS.NS",
+        "target_alpha_outperform": np.random.choice([0, 1], size=n_val),
+    })
+
+    X_train_df.to_parquet(processed_dir / "X_train.parquet", index=False)
+    y_train_df.to_parquet(processed_dir / "y_train.parquet", index=False)
+    X_val_df.to_parquet(processed_dir / "X_val.parquet", index=False)
+    y_val_df.to_parquet(processed_dir / "y_val.parquet", index=False)
+
+    pipeline = ModelTrainingPipeline(
+        processed_dir=processed_dir,
+        models_dir=models_dir,
+        reports_dir=reports_dir,
+        tune=True,
+        tune_model="decision_tree",
+        n_splits=3,
+        n_iter=2,
+    )
+
+    metrics = pipeline.train_and_evaluate()
+    assert "_hyperparameter_tuning" in metrics
+    assert metrics["_hyperparameter_tuning"]["model"] == "decision_tree"
+    assert "best_params" in metrics["_hyperparameter_tuning"]
+
+    tuning_file = reports_dir / "hyperparameter_tuning.json"
+    assert tuning_file.exists()
+    with open(tuning_file, "r", encoding="utf-8") as f:
+        tuning_data = json.load(f)
+    assert tuning_data["model"] == "decision_tree"
+    assert "best_score" in tuning_data

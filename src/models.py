@@ -35,6 +35,11 @@ from sklearn.metrics import (
     recall_score,
     roc_auc_score,
 )
+from sklearn.model_selection import (
+    GridSearchCV,
+    RandomizedSearchCV,
+    TimeSeriesSplit,
+)
 from sklearn.neural_network import MLPClassifier
 from sklearn.tree import DecisionTreeClassifier
 from sklearn.ensemble import RandomForestClassifier
@@ -126,6 +131,177 @@ def get_model_instances() -> Dict[str, Any]:
     )
 
     return models
+
+
+# ==============================================================================
+# Hyperparameter Search Spaces & Chronological TimeSeriesSplit Tuning
+# ==============================================================================
+
+PARAM_SEARCH_SPACES: Dict[str, Dict[str, List[Any]]] = {
+    "xgboost": {
+        "max_depth": [3, 4, 5, 6],
+        "learning_rate": [0.01, 0.02, 0.03, 0.05, 0.1],
+        "n_estimators": [80, 100, 120, 150],
+        "subsample": [0.7, 0.8, 0.9, 1.0],
+        "colsample_bytree": [0.7, 0.8, 0.9, 1.0],
+        "min_child_weight": [1, 3, 5],
+    },
+    "random_forest": {
+        "n_estimators": [80, 100, 150, 200],
+        "max_depth": [6, 8, 10, 12, None],
+        "min_samples_leaf": [10, 20, 30, 50],
+        "max_features": ["sqrt", "log2", 0.7, 0.8],
+    },
+    "decision_tree": {
+        "max_depth": [3, 4, 5, 6, 8],
+        "min_samples_leaf": [10, 20, 30, 50, 100],
+        "criterion": ["gini", "entropy"],
+    },
+    "logistic_regression": {
+        "C": [0.001, 0.01, 0.05, 0.1, 0.5, 1.0, 10.0],
+        "penalty": ["l2"],
+        "solver": ["lbfgs"],
+    },
+}
+
+
+def tune_hyperparameters(
+    model_name: str,
+    X_train: pd.DataFrame,
+    y_train: np.ndarray,
+    n_splits: int = 5,
+    n_iter: int = 8,
+    scoring: str = "average_precision",
+    search_type: str = "randomized",
+    param_grid: Optional[Dict[str, Any]] = None,
+    random_state: int = 42,
+    n_jobs: int = 1,
+) -> Tuple[Any, Dict[str, Any], float, pd.DataFrame]:
+    """
+    Tunes hyperparameters for a specified model architecture using chronological
+    TimeSeriesSplit to strictly prevent temporal lookahead leakage.
+
+    Parameters:
+    -----------
+    model_name : str
+        Model identifier ('xgboost', 'random_forest', 'decision_tree', 'logistic_regression').
+    X_train : pd.DataFrame
+        Training feature matrix without Date/Ticker columns.
+    y_train : np.ndarray
+        1D binary target series.
+    n_splits : int
+        Number of forward chronological splits for TimeSeriesSplit (default: 5).
+    n_iter : int
+        Number of parameter combinations to sample for RandomizedSearchCV (default: 8).
+    scoring : str
+        Scikit-learn scoring string, e.g. 'average_precision' (PR-AUC) or 'roc_auc'.
+    search_type : str
+        'randomized' for RandomizedSearchCV, or 'grid' for GridSearchCV.
+    param_grid : Optional[Dict[str, Any]]
+        Custom parameter search dictionary. If None, uses defaults from PARAM_SEARCH_SPACES.
+    random_state : int
+        Random seed for reproducibility.
+    n_jobs : int
+        Number of parallel worker processes (default: 1).
+
+    Returns:
+    --------
+    best_estimator : Any
+        Tuned model fitted on the entire training dataset.
+    best_params : Dict[str, Any]
+        Dictionary of optimal hyperparameters found.
+    best_score : float
+        Mean cross-validation score across the TimeSeriesSplit folds.
+    cv_results_df : pd.DataFrame
+        Tabular summary of evaluated parameter combinations and their fold performance.
+    """
+    models = get_model_instances()
+    canonical_name = model_name.lower().strip()
+
+    # Handle alias matching (e.g. 'xgb' -> 'xgboost', 'rf' -> 'random_forest', 'dt' -> 'decision_tree')
+    alias_map = {
+        "xgb": "xgboost",
+        "rf": "random_forest",
+        "dt": "decision_tree",
+        "lr": "logistic_regression",
+        "logistic": "logistic_regression",
+    }
+    canonical_name = alias_map.get(canonical_name, canonical_name)
+
+    if canonical_name not in models:
+        # Fallback to key containing name
+        matched_keys = [k for k in models if canonical_name in k]
+        if matched_keys:
+            canonical_name = matched_keys[0]
+        else:
+            raise ValueError(
+                f"Unknown model_name '{model_name}'. Available: {list(models.keys())}"
+            )
+
+    base_model = models[canonical_name]
+
+    if param_grid is None:
+        if canonical_name not in PARAM_SEARCH_SPACES:
+            raise ValueError(
+                f"No default parameter search space defined for '{canonical_name}'. "
+                f"Please pass param_grid explicitly."
+            )
+        search_space = PARAM_SEARCH_SPACES[canonical_name]
+    else:
+        search_space = param_grid
+
+    logger.info(
+        "Initializing chronological TimeSeriesSplit(n_splits=%d) for '%s'...",
+        n_splits,
+        canonical_name,
+    )
+    tscv = TimeSeriesSplit(n_splits=n_splits)
+
+    if search_type.lower() == "grid":
+        logger.info(
+            "Executing GridSearchCV across %d parameter keys...",
+            len(search_space),
+        )
+        search = GridSearchCV(
+            estimator=base_model,
+            param_grid=search_space,
+            cv=tscv,
+            scoring=scoring,
+            n_jobs=n_jobs,
+            refit=True,
+        )
+    else:
+        logger.info(
+            "Executing RandomizedSearchCV (n_iter=%d) across parameter distributions...",
+            n_iter,
+        )
+        search = RandomizedSearchCV(
+            estimator=base_model,
+            param_distributions=search_space,
+            n_iter=n_iter,
+            cv=tscv,
+            scoring=scoring,
+            random_state=random_state,
+            n_jobs=n_jobs,
+            refit=True,
+        )
+
+    search.fit(X_train, y_train)
+
+    best_estimator = search.best_estimator_
+    best_params = search.best_params_
+    best_score = float(search.best_score_)
+    cv_results_df = pd.DataFrame(search.cv_results_)
+
+    logger.info(
+        "[%s Tuning Complete] Best %s Score: %.4f | Optimal Params: %s",
+        canonical_name.upper(),
+        scoring,
+        best_score,
+        best_params,
+    )
+
+    return best_estimator, best_params, best_score, cv_results_df
 
 
 # ==============================================================================
@@ -239,10 +415,18 @@ class ModelTrainingPipeline:
         processed_dir: Path = DEFAULT_PROCESSED_DIR,
         models_dir: Path = DEFAULT_MODELS_DIR,
         reports_dir: Path = DEFAULT_REPORTS_DIR,
+        tune: bool = False,
+        tune_model: str = "xgboost",
+        n_splits: int = 5,
+        n_iter: int = 8,
     ):
         self.processed_dir = Path(processed_dir)
         self.models_dir = Path(models_dir)
         self.reports_dir = Path(reports_dir)
+        self.tune = tune
+        self.tune_model = tune_model.lower().strip()
+        self.n_splits = n_splits
+        self.n_iter = n_iter
 
     def load_data(
         self,
@@ -313,6 +497,69 @@ class ModelTrainingPipeline:
             "Ticker": meta_val["Ticker"].values,
             "y_true": y_val,
         }
+
+        # Automated hyperparameter tuning if requested
+        if self.tune:
+            logger.info(
+                "Automated hyperparameter tuning requested for '%s' using TimeSeriesSplit (n_splits=%d, n_iter=%d)...",
+                self.tune_model,
+                self.n_splits,
+                self.n_iter,
+            )
+            try:
+                tuned_model, best_params, best_score, cv_results = tune_hyperparameters(
+                    model_name=self.tune_model,
+                    X_train=X_train,
+                    y_train=y_train,
+                    n_splits=self.n_splits,
+                    n_iter=self.n_iter,
+                    scoring="average_precision",
+                )
+                alias_map = {
+                    "xgb": "xgboost",
+                    "rf": "random_forest",
+                    "dt": "decision_tree",
+                    "lr": "logistic_regression",
+                }
+                c_name = alias_map.get(self.tune_model, self.tune_model)
+                target_key = None
+                if c_name in models:
+                    target_key = c_name
+                else:
+                    for k in models:
+                        if c_name in k:
+                            target_key = k
+                            break
+
+                if target_key:
+                    models[target_key] = tuned_model
+                    clean_best_params = {}
+                    for k, v in best_params.items():
+                        if isinstance(v, (np.integer, np.floating)):
+                            clean_best_params[k] = v.item()
+                        elif v is None or isinstance(v, (int, float, str, bool)):
+                            clean_best_params[k] = v
+                        else:
+                            clean_best_params[k] = str(v)
+
+                    tuning_summary = {
+                        "model": target_key,
+                        "cv_method": f"TimeSeriesSplit(n_splits={self.n_splits})",
+                        "scoring": "average_precision",
+                        "best_score": best_score,
+                        "best_params": clean_best_params,
+                        "candidates_evaluated": len(cv_results),
+                    }
+                    compiled_metrics["_hyperparameter_tuning"] = tuning_summary
+                    tuning_path = self.reports_dir / "hyperparameter_tuning.json"
+                    with open(tuning_path, "w", encoding="utf-8") as f:
+                        json.dump(tuning_summary, f, indent=2)
+                    logger.info("Saved hyperparameter tuning results to %s", tuning_path)
+            except Exception as e:
+                logger.error(
+                    "Hyperparameter tuning encountered error: %s. Proceeding with baseline models.",
+                    e,
+                )
 
         logger.info("Starting model training and evaluation suite...")
 
@@ -393,6 +640,30 @@ def main() -> None:
         default=str(DEFAULT_REPORTS_DIR),
         help="Directory where evaluation metrics and predictions will be stored.",
     )
+    parser.add_argument(
+        "--tune",
+        action="store_true",
+        default=False,
+        help="Run automated hyperparameter tuning with TimeSeriesSplit before evaluation.",
+    )
+    parser.add_argument(
+        "--tune-model",
+        type=str,
+        default="xgboost",
+        help="Model architecture to tune (e.g. xgboost, random_forest, decision_tree, logistic_regression).",
+    )
+    parser.add_argument(
+        "--n-splits",
+        type=int,
+        default=5,
+        help="Number of chronological splits for TimeSeriesSplit cross-validation.",
+    )
+    parser.add_argument(
+        "--n-iter",
+        type=int,
+        default=8,
+        help="Number of parameter search iterations for RandomizedSearchCV.",
+    )
 
     args = parser.parse_args()
 
@@ -400,6 +671,10 @@ def main() -> None:
         processed_dir=Path(args.processed_dir),
         models_dir=Path(args.models_dir),
         reports_dir=Path(args.reports_dir),
+        tune=args.tune,
+        tune_model=args.tune_model,
+        n_splits=args.n_splits,
+        n_iter=args.n_iter,
     )
     pipeline.train_and_evaluate()
 

@@ -164,6 +164,14 @@ Five distinct machine learning architectures were trained, tuned, and evaluated 
 | **XGBoost (Gradient Boosted Trees)** | 0.5229 | 0.4606 | 0.50 | 43.11% | 3.90% | 1,002 / 24,650 |
 | **MLP Neural Network** | 0.5189 | 0.4647 | 0.50 | 46.75% | 34.70% | 8,219 / 24,650 |
 
+### Automated Hyperparameter Tuning with TimeSeriesSplit (Rubric 4.4)
+To satisfy **Rubric Section 4.4** (*Hyperparameters tuning is used to tune models*), NiftyAlpha incorporates a formal `tune_hyperparameters()` routine in [`src/models.py`](src/models.py).
+
+Standard K-Fold cross-validation causes catastrophic lookahead leakage on financial time-series data because future market regimes leak into past training folds. NiftyAlpha strictly enforces temporal causality using an expanding-window **5-Fold chronological `TimeSeriesSplit`**:
+- **Search Spaces (`PARAM_SEARCH_SPACES`)**: Sweeps across tree depth (`max_depth`: [3, 4, 5, 6]), learning rates (`learning_rate`: [0.01, 0.02, 0.03, 0.05, 0.1]), ensemble capacity (`n_estimators`: [80, 100, 120, 150]), subsampling ratios ([0.70, 0.80, 0.90, 1.0]), column subsampling ([0.70, 0.80, 0.90, 1.0]), and regularizations (`min_child_weight`, `min_samples_leaf`, $L_2$ penalty $C$).
+- **Quant Optimization Objective**: Evaluates against **Average Precision (PR-AUC)** rather than raw accuracy to maximize positive class (Buy signal) precision.
+- **CLI & Automated Pipeline**: Easily triggered via `python main.py train --tune --tune-model xgboost` or `python src/models.py --tune`, automatically serializing optimal hyperparameters and fold scores to [`reports/hyperparameter_tuning.json`](reports/hyperparameter_tuning.json).
+
 ### Explainable AI (XAI) with SHAP
 To avoid black-box decision making, NiftyAlpha utilizes `shap.TreeExplainer` to compute exact Shapley feature attributions:
 - **Primary Bullish Drivers**: Low Relative Strength Index values (`rsi_14 < 35`, mean-reversion oversold conditions) paired with positive relative price momentum above the 200-day moving average.
@@ -360,6 +368,7 @@ This project was built to satisfy all criteria of the DataTalksClub Stock Market
 | **EDA & Feature Engineering** | Holiday alignment via forward-fill (`ffill()`), RSI(14), Moving Average ratios, Brent rolling correlations, Union Budget encodings, boundary pruning. | [src/features.py](src/features.py)<br>[01_eda_and_data.ipynb](notebooks/01_eda_and_data.ipynb) |
 | **Validation Strategy** | Strict chronological partitioning (Train $\le$ 2021, Val 2022–2023, Test 2024+); StandardScaler fitted strictly on Train split without leakage. | [src/features.py](src/features.py)<br>[02_model_experiments.ipynb](notebooks/02_model_experiments.ipynb) |
 | **Model Prototyping** | Comparison of 5 models: Logistic Regression baseline, Decision Tree, Random Forest, XGBoost, and MLP Neural Network. | [src/models.py](src/models.py)<br>[02_model_experiments.ipynb](notebooks/02_model_experiments.ipynb) |
+| **Hyperparameter Tuning (Rubric 4.4)** | Formal `tune_hyperparameters()` routine utilizing chronological 5-Fold `TimeSeriesSplit` to optimize tree depth, learning rates, subsampling, and regularizations without lookahead leakage. | [src/models.py](src/models.py)<br>[02_model_experiments.ipynb](notebooks/02_model_experiments.ipynb) |
 | **Evaluation Metrics** | Precision-Recall curve analysis, probability threshold sweeps ($0.50$ to $0.65$), ROC-AUC, PR-AUC, F1-Score, and signal frequency. | [src/models.py](src/models.py)<br>[reports/metrics.json](reports/metrics.json) |
 | **Explainable AI (XAI)** | TreeExplainer SHAP summary plots and feature importance rankings isolating predictive drivers. | [src/models.py](src/models.py)<br>[02_model_experiments.ipynb](notebooks/02_model_experiments.ipynb) |
 | **Realistic Backtesting** | Day-by-day discrete chronological loop, 0.20% round-trip friction (STT + brokerage), max 5 positions, -8% Stop-Loss (with gap fill), +15% Take-Profit. | [src/backtest.py](src/backtest.py)<br>[03_trading_simulation.ipynb](notebooks/03_trading_simulation.ipynb) |
@@ -372,7 +381,7 @@ This project was built to satisfy all criteria of the DataTalksClub Stock Market
 | **Workflow Demonstration** | End-to-end notebook importing from `src/` modules, executing ingestion, features, modeling, simulation, and live signal generation. | [00_workflow_pipeline.ipynb](notebooks/00_workflow_pipeline.ipynb) |
 | **Interactive UI** | 3-tab Streamlit dashboard: Live Signals, Plotly Equity Curve & Trade Audit, SHAP Feature Importance. | [dashboard/app.py](dashboard/app.py) |
 | **Containerization** | Production multi-stage Dockerfile compiling C TA-Lib and installing locked requirements. | [Dockerfile](Dockerfile) |
-| **Automated Testing** | 20 unit tests verifying ingestion, features, modeling, thresholding, vector simulation, active long-short engine, and dashboard loaders. | [tests/](tests/) |
+| **Automated Testing** | 22 unit tests verifying ingestion, features, modeling, hyperparameter tuning with TimeSeriesSplit, thresholding, vector simulation, active long-short engine, and dashboard loaders. | [tests/](tests/) |
 
 ---
 
@@ -499,6 +508,7 @@ NiftyAlpha/
 │   └── mlp_neural_network_model.joblib
 ├── reports/                       # Simulation and evaluation outputs
 │   ├── metrics.json               # Compiled ROC-AUC, PR-AUC & threshold stats
+│   ├── hyperparameter_tuning.json # Serialized optimal hyperparameters, CV fold scores, and search metadata
 │   ├── validation_predictions.parquet # Out-of-fold validation probabilities
 │   ├── equity_curve.csv           # Daily strategy and benchmark equity curves
 │   ├── trade_log.csv              # Granular trade execution audit trail

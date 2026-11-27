@@ -59,15 +59,24 @@ def run_features() -> None:
     logger.info(">>> [Phase 3/5] Feature Engineering Completed.")
 
 
-def run_train() -> None:
+def run_train(
+    tune: bool = False,
+    tune_model: str = "xgboost",
+    n_splits: int = 5,
+    n_iter: int = 8,
+) -> None:
     """Executes Phase 4: Machine Learning & Modeling."""
-    logger.info(">>> [Phase 4/5] Initiating ML Modeling & Precision Thresholding...")
+    logger.info(">>> [Phase 4/5] Initiating ML Modeling & Precision Thresholding (Tune=%s)...", tune)
     from src.models import ModelTrainingPipeline
 
     pipeline = ModelTrainingPipeline(
         processed_dir=PROCESSED_DIR,
         models_dir=MODELS_DIR,
         reports_dir=REPORTS_DIR,
+        tune=tune,
+        tune_model=tune_model,
+        n_splits=n_splits,
+        n_iter=n_iter,
     )
     pipeline.train_and_evaluate()
     logger.info(">>> [Phase 4/5] Model Training Completed.")
@@ -89,7 +98,12 @@ def run_simulate(threshold: float = 0.525) -> None:
     logger.info(">>> [Phase 5/5] Trading Simulation Completed.")
 
 
-def run_all(force: bool = False, threshold: float = 0.525) -> None:
+def run_all(
+    force: bool = False,
+    threshold: float = 0.525,
+    tune: bool = False,
+    tune_model: str = "xgboost",
+) -> None:
     """Executes all pipeline phases sequentially."""
     start_time = time.time()
     banner = "=" * 70
@@ -97,7 +111,7 @@ def run_all(force: bool = False, threshold: float = 0.525) -> None:
 
     run_fetch(force=force)
     run_features()
-    run_train()
+    run_train(tune=tune, tune_model=tune_model)
     run_simulate(threshold=threshold)
 
     elapsed = time.time() - start_time
@@ -125,7 +139,11 @@ def main() -> None:
     subparsers.add_parser("features", help="Extract technical features, temporal split, and scale data")
 
     # Subcommand: train
-    subparsers.add_parser("train", help="Train and serialize ML models with precision thresholding")
+    p_train = subparsers.add_parser("train", help="Train and serialize ML models with precision thresholding")
+    p_train.add_argument("--tune", action="store_true", default=False, help="Run automated hyperparameter tuning with TimeSeriesSplit")
+    p_train.add_argument("--tune-model", type=str, default="xgboost", help="Model architecture to tune (e.g. xgboost, random_forest)")
+    p_train.add_argument("--n-splits", type=int, default=5, help="Number of chronological splits for TimeSeriesSplit")
+    p_train.add_argument("--n-iter", type=int, default=8, help="Number of parameter search iterations for RandomizedSearchCV")
 
     # Subcommand: simulate
     p_sim = subparsers.add_parser("simulate", help="Run day-by-day backtest simulation on test set")
@@ -135,6 +153,8 @@ def main() -> None:
     p_all = subparsers.add_parser("run_all", help="Execute complete pipeline end-to-end")
     p_all.add_argument("--force", action="store_true", default=False, help="Force fresh download during fetch stage")
     p_all.add_argument("--threshold", type=float, default=0.525, help="Confidence threshold for buy signals")
+    p_all.add_argument("--tune", action="store_true", default=False, help="Run automated hyperparameter tuning during train stage")
+    p_all.add_argument("--tune-model", type=str, default="xgboost", help="Model architecture to tune")
 
     args = parser.parse_args()
 
@@ -143,11 +163,21 @@ def main() -> None:
     elif args.command == "features":
         run_features()
     elif args.command == "train":
-        run_train()
+        run_train(
+            tune=args.tune,
+            tune_model=args.tune_model,
+            n_splits=args.n_splits,
+            n_iter=args.n_iter,
+        )
     elif args.command == "simulate":
         run_simulate(threshold=args.threshold)
     elif args.command == "run_all":
-        run_all(force=args.force, threshold=args.threshold)
+        run_all(
+            force=args.force,
+            threshold=args.threshold,
+            tune=args.tune,
+            tune_model=args.tune_model,
+        )
 
 
 if __name__ == "__main__":

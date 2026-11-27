@@ -1,0 +1,15 @@
+{
+  "model": "xgboost",
+  "cv_method": "TimeSeriesSplit(n_splits=5)",
+  "scoring": "average_precision",
+  "best_score": 0.46374137603994525,
+  "best_params": {
+    "subsample": 0.7,
+    "n_estimators": 150,
+    "min_child_weight": 5,
+    "max_depth": 4,
+    "learning_rate": 0.1,
+    "colsample_bytree": 0.7
+  },
+  "candidates_evaluated": 8
+}

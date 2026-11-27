@@ -1,4 +1,19 @@
 {
+  "_hyperparameter_tuning": {
+    "model": "xgboost",
+    "cv_method": "TimeSeriesSplit(n_splits=5)",
+    "scoring": "average_precision",
+    "best_score": 0.46374137603994525,
+    "best_params": {
+      "subsample": 0.7,
+      "n_estimators": 150,
+      "min_child_weight": 5,
+      "max_depth": 4,
+      "learning_rate": 0.1,
+      "colsample_bytree": 0.7
+    },
+    "candidates_evaluated": 8
+  },
   "logistic_regression": {
     "roc_auc": 0.5516774484629883,
     "pr_auc": 0.4882164437743412,
@@ -141,49 +156,49 @@
     }
   },
   "xgboost": {
-    "roc_auc": 0.5238022164717624,
-    "pr_auc": 0.4607848055565493,
+    "roc_auc": 0.5098729915614683,
+    "pr_auc": 0.4504714606109909,
     "thresholds": {
       "0.50": {
         "threshold": 0.5,
-        "precision": 0.4339250493096647,
-        "recall": 0.03973629549354285,
-        "f1_score": 0.07280549350541904,
-        "buy_signals": 1014,
+        "precision": 0.45039628313746927,
+        "recall": 0.14883048857581505,
+        "f1_score": 0.22373065435786044,
+        "buy_signals": 3659,
         "total_samples": 24650
       },
       "0.55": {
         "threshold": 0.55,
-        "precision": 0.4065040650406504,
-        "recall": 0.009030976248532467,
-        "f1_score": 0.017669405424507467,
-        "buy_signals": 246,
+        "precision": 0.41583333333333333,
+        "recall": 0.04506457148017701,
+        "f1_score": 0.08131671148048562,
+        "buy_signals": 1200,
         "total_samples": 24650
       },
       "0.60": {
         "threshold": 0.6,
-        "precision": 0.3411764705882353,
-        "recall": 0.0026189831120744154,
-        "f1_score": 0.005198064169205951,
-        "buy_signals": 85,
+        "precision": 0.4088888888888889,
+        "recall": 0.01661699629729974,
+        "f1_score": 0.031936127744510975,
+        "buy_signals": 450,
         "total_samples": 24650
       },
       "0.65": {
         "threshold": 0.65,
-        "precision": 0.23076923076923078,
-        "recall": 0.000270929287455974,
-        "f1_score": 0.0005412231643514342,
-        "buy_signals": 13,
+        "precision": 0.37320574162679426,
+        "recall": 0.007044161473855324,
+        "f1_score": 0.013827335578798085,
+        "buy_signals": 209,
         "total_samples": 24650
       }
     },
     "best_precision_threshold": "0.50",
     "best_threshold_metrics": {
       "threshold": 0.5,
-      "precision": 0.4339250493096647,
-      "recall": 0.03973629549354285,
-      "f1_score": 0.07280549350541904,
-      "buy_signals": 1014,
+      "precision": 0.45039628313746927,
+      "recall": 0.14883048857581505,
+      "f1_score": 0.22373065435786044,
+      "buy_signals": 3659,
       "total_samples": 24650
     }
   },
